@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { type Recipe, CATEGORY_COLOR } from "../_data/mock";
+import { usePageLoading } from "@/app/_components/LoadingOverlay";
+import LoginRequiredModal from "@/app/_components/LoginRequiredModal";
 
 const BookmarkIcon = ({ filled }: { filled: boolean }) => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
@@ -23,63 +25,77 @@ const EyeIcon = () => (
   </svg>
 );
 
-export default function RecipeCard({ recipe }: { recipe: Recipe }) {
+interface Props {
+  recipe: Recipe;
+  isLoggedIn: boolean;
+}
+
+export default function RecipeCard({ recipe, isLoggedIn }: Props) {
   const router = useRouter();
+  const { setLoading } = usePageLoading();
   const [bookmarked, setBookmarked] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const categoryStyle = CATEGORY_COLOR[recipe.category] ?? "bg-stone-100 text-stone-500";
 
+  const handleCardClick = () => {
+    if (!isLoggedIn) { setShowLoginModal(true); return; }
+    setLoading(true);
+    router.push(`/recipe/${recipe.id}`);
+  };
+
+  const handleBookmark = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isLoggedIn) { setShowLoginModal(true); return; }
+    setBookmarked((v) => !v);
+  };
+
   return (
-    <div
-      onClick={() => router.push(`/recipe/${recipe.id}`)}
-      className="cursor-pointer active:opacity-90 transition-opacity"
-    >
-      {/* 썸네일 */}
-      <div className="relative aspect-video bg-stone-100 flex items-center justify-center text-stone-300 text-sm">
-        이미지
-        <span className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-xs font-semibold ${categoryStyle}`}>
-          {recipe.category}
-        </span>
-      </div>
-
-      {/* 정보 */}
-      <div className="px-4 pt-3 pb-4 space-y-1.5">
-        {/* 제목 */}
-        <h3 className="text-sm font-bold text-stone-800 line-clamp-2 leading-snug">
-          {recipe.title}
-        </h3>
-
-        {/* 내용 미리보기 */}
-        <p className="text-xs text-stone-500 line-clamp-2 leading-relaxed">
-          {recipe.content}
-        </p>
-
-        {/* 태그 */}
-        <p className="text-xs text-point line-clamp-1">
-          {recipe.tags.map((t) => `#${t}`).join("  ")}
-        </p>
-
-        {/* 작성자 | 날짜 */}
-        <div className="flex items-center gap-1.5 text-xs text-stone-400">
-          <span className="font-medium text-stone-500">{recipe.author.username}</span>
-          <span>·</span>
-          <span>{recipe.createdAt}</span>
+    <>
+      <div
+        onClick={handleCardClick}
+        className="cursor-pointer active:opacity-90 transition-opacity"
+      >
+        {/* 썸네일 */}
+        <div className="relative aspect-video bg-stone-100 flex items-center justify-center text-stone-300 text-sm">
+          이미지
+          <span className={`absolute bottom-2 left-2 px-2 py-0.5 rounded-md text-xs font-semibold ${categoryStyle}`}>
+            {recipe.category}
+          </span>
         </div>
 
-        {/* 조회수 / 좋아요 / 북마크 */}
-        <div className="flex items-center gap-1 text-xs text-stone-400">
-          <EyeIcon />
-          <span className="ml-0.5">{recipe.viewCount.toLocaleString()}</span>
-          <span className="mx-1.5">·</span>
-          <HeartIcon />
-          <span className="ml-0.5">{recipe.likeCount.toLocaleString()}</span>
-          <button
-            onClick={(e) => { e.stopPropagation(); setBookmarked((v) => !v); }}
-            className={`ml-auto transition-colors ${bookmarked ? "text-point" : "text-stone-300"}`}
-          >
-            <BookmarkIcon filled={bookmarked} />
-          </button>
+        {/* 정보 */}
+        <div className="px-4 pt-3 pb-4 space-y-1.5">
+          <h3 className="text-sm font-bold text-stone-800 line-clamp-2 leading-snug">
+            {recipe.title}
+          </h3>
+          <p className="text-xs text-stone-500 line-clamp-2 leading-relaxed">
+            {recipe.content}
+          </p>
+          <p className="text-xs text-point line-clamp-1">
+            {recipe.tags.map((t) => `#${t}`).join("  ")}
+          </p>
+          <div className="flex items-center gap-1.5 text-xs text-stone-400">
+            <span className="font-medium text-stone-500">{recipe.author.username}</span>
+            <span>·</span>
+            <span>{recipe.createdAt}</span>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-stone-400">
+            <EyeIcon />
+            <span className="ml-0.5">{recipe.viewCount.toLocaleString()}</span>
+            <span className="mx-1.5">·</span>
+            <HeartIcon />
+            <span className="ml-0.5">{recipe.likeCount.toLocaleString()}</span>
+            <button
+              onClick={handleBookmark}
+              className={`ml-auto transition-colors ${bookmarked ? "text-point" : "text-stone-300"}`}
+            >
+              <BookmarkIcon filled={bookmarked} />
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {showLoginModal && <LoginRequiredModal onClose={() => setShowLoginModal(false)} />}
+    </>
   );
 }

@@ -1,8 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { usePageLoading } from "@/app/_components/LoadingOverlay";
+import LoginRequiredModal from "@/app/_components/LoginRequiredModal";
 
 const FeedIcon = ({ active }: { active: boolean }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -55,7 +56,9 @@ interface BottomNavProps {
 export default function BottomNav({ userId, role }: BottomNavProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { setLoading } = usePageLoading();
   const [showModal, setShowModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const isActive = (href: string) => pathname.startsWith(href);
   const isMyPage = userId
@@ -63,7 +66,6 @@ export default function BottomNav({ userId, role }: BottomNavProps) {
     : false;
 
   const mypageHref = userId ? `/${userId}` : "/login";
-  const mypageActive = isMyPage;
 
   const modalOptions = () => {
     const base = [
@@ -76,19 +78,27 @@ export default function BottomNav({ userId, role }: BottomNavProps) {
     return base;
   };
 
+  const navigate = (href: string) => {
+    if (!pathname.startsWith(href)) setLoading(true);
+    router.push(href);
+  };
+
   const handleWrite = () => {
+    if (!userId) {
+      setShowLoginModal(true);
+      return;
+    }
     if (pathname.startsWith("/feed")) {
-      router.push("/write/feed");
+      navigate("/write/feed");
     } else if (pathname.startsWith("/recipe")) {
-      router.push("/write/recipe");
+      navigate("/write/recipe");
     } else if (pathname.startsWith("/offline")) {
       if (role === "ADMIN") {
-        router.push("/write/offline");
+        navigate("/write/offline");
       } else {
         setShowModal(true);
       }
     } else {
-      // 마이페이지 또는 기타
       setShowModal(true);
     }
   };
@@ -108,7 +118,7 @@ export default function BottomNav({ userId, role }: BottomNavProps) {
               {modalOptions().map(({ label, href }) => (
                 <button
                   key={href}
-                  onClick={() => { router.push(href); setShowModal(false); }}
+                  onClick={() => { setShowModal(false); navigate(href); }}
                   className="flex-1 h-14 rounded-2xl bg-stone-50 border border-stone-200 text-sm font-semibold text-stone-700 active:bg-stone-100 transition-colors"
                 >
                   {label}
@@ -119,21 +129,24 @@ export default function BottomNav({ userId, role }: BottomNavProps) {
         </>
       )}
 
+      {/* 로그인 유도 모달 */}
+      {showLoginModal && <LoginRequiredModal onClose={() => setShowLoginModal(false)} />}
+
       <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-stone-200 flex items-center z-40">
         {/* 피드 · 레시피 */}
         {NAV_ITEMS.slice(0, 2).map(({ label, href, Icon }) => {
           const active = isActive(href);
           return (
-            <Link
+            <button
               key={href}
-              href={href}
+              onClick={() => navigate(href)}
               className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
                 active ? "text-point" : "text-stone-400"
               }`}
             >
               <Icon active={active} />
               <span className="text-[10px] font-medium">{label}</span>
-            </Link>
+            </button>
           );
         })}
 
@@ -153,29 +166,29 @@ export default function BottomNav({ userId, role }: BottomNavProps) {
         {NAV_ITEMS.slice(2).map(({ label, href, Icon }) => {
           const active = isActive(href);
           return (
-            <Link
+            <button
               key={href}
-              href={href}
+              onClick={() => navigate(href)}
               className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
                 active ? "text-point" : "text-stone-400"
               }`}
             >
               <Icon active={active} />
               <span className="text-[10px] font-medium">{label}</span>
-            </Link>
+            </button>
           );
         })}
 
         {/* 마이페이지 */}
-        <Link
-          href={mypageHref}
+        <button
+          onClick={() => navigate(mypageHref)}
           className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
-            mypageActive ? "text-point" : "text-stone-400"
+            isMyPage ? "text-point" : "text-stone-400"
           }`}
         >
-          <MyPageIcon active={mypageActive} />
+          <MyPageIcon active={isMyPage} />
           <span className="text-[10px] font-medium">마이페이지</span>
-        </Link>
+        </button>
       </nav>
     </>
   );

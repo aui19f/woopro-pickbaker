@@ -3,11 +3,15 @@
 import { MOCK_POSTS } from "../_data/mock";
 import PostCard from "./PostCard";
 
-export default function FeedList() {
+interface Props {
+  isLoggedIn: boolean;
+}
+
+export default function FeedList({ isLoggedIn }: Props) {
   return (
     <div className="bg-white">
       {MOCK_POSTS.map((post) => (
-        <PostCard key={post.id} post={post} />
+        <PostCard key={post.id} post={post} isLoggedIn={isLoggedIn} />
       ))}
     </div>
   );

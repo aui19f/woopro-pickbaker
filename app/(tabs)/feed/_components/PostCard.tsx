@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { type Post } from "../_data/mock";
 import ImageSlider from "./ImageSlider";
 import CommentModal from "./CommentModal";
+import LoginRequiredModal from "@/app/_components/LoginRequiredModal";
 
 /* ─── Icons ──────────────────────────────────── */
 
@@ -40,13 +41,14 @@ const DotsIcon = () => (
 
 /* ─── PostCard ───────────────────────────────── */
 
-export default function PostCard({ post }: { post: Post }) {
+export default function PostCard({ post, isLoggedIn }: { post: Post; isLoggedIn: boolean }) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [bookmarked, setBookmarked] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [isTruncated, setIsTruncated] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const textRef = useRef<HTMLParagraphElement>(null);
 
@@ -54,6 +56,11 @@ export default function PostCard({ post }: { post: Post }) {
     const el = textRef.current;
     if (el) setIsTruncated(el.scrollHeight > el.clientHeight);
   }, []);
+
+  const guard = (action: () => void) => {
+    if (!isLoggedIn) { setShowLoginModal(true); return; }
+    action();
+  };
 
   const toggleLike = () => {
     setLiked((v) => !v);
@@ -86,16 +93,16 @@ export default function PostCard({ post }: { post: Post }) {
 
       {/* 액션 버튼 */}
       <div className="flex items-center px-3 py-2">
-        <button onClick={toggleLike} className="p-1">
+        <button onClick={() => guard(toggleLike)} className="p-1">
           <HeartIcon filled={liked} />
         </button>
-        <button onClick={() => setShowComments(true)} className="p-1 ml-1">
+        <button onClick={() => guard(() => setShowComments(true))} className="p-1 ml-1">
           <CommentIcon />
         </button>
         <button onClick={handleShare} className="p-1 ml-1">
           <ShareIcon />
         </button>
-        <button onClick={() => setBookmarked((v) => !v)} className="p-1 ml-auto">
+        <button onClick={() => guard(() => setBookmarked((v) => !v))} className="p-1 ml-auto">
           <BookmarkIcon filled={bookmarked} />
         </button>
       </div>
@@ -115,10 +122,7 @@ export default function PostCard({ post }: { post: Post }) {
           {post.content}
         </p>
         {isTruncated && !expanded && (
-          <button
-            onClick={() => setExpanded(true)}
-            className="text-sm text-stone-400 mt-0.5"
-          >
+          <button onClick={() => setExpanded(true)} className="text-sm text-stone-400 mt-0.5">
             더 보기
           </button>
         )}
@@ -127,7 +131,7 @@ export default function PostCard({ post }: { post: Post }) {
       {/* 댓글 보기 */}
       {post.commentCount > 0 && (
         <button
-          onClick={() => setShowComments(true)}
+          onClick={() => guard(() => setShowComments(true))}
           className="px-4 py-1 text-sm text-stone-400"
         >
           댓글 {post.commentCount}개 모두 보기
@@ -141,6 +145,9 @@ export default function PostCard({ post }: { post: Post }) {
       {showComments && (
         <CommentModal postId={post.id} onClose={() => setShowComments(false)} />
       )}
+
+      {/* 로그인 유도 모달 */}
+      {showLoginModal && <LoginRequiredModal onClose={() => setShowLoginModal(false)} />}
     </article>
   );
 }

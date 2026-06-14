@@ -3,6 +3,8 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { MOCK_EVENTS, formatDate, getEventStatus, type OfflineEvent, type EventStatus } from "../_data/mock";
+import { usePageLoading } from "@/app/_components/LoadingOverlay";
+import LoginRequiredModal from "@/app/_components/LoginRequiredModal";
 
 type StatusFilter = "all" | EventStatus;
 
@@ -40,7 +42,6 @@ const MapPinIcon = () => (
   </svg>
 );
 
-
 const ClockIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="shrink-0 text-stone-400">
     <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
@@ -59,55 +60,137 @@ const XIcon = () => (
   </svg>
 );
 
+const HeartIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? "#ef4444" : "none"} stroke={filled ? "#ef4444" : "currentColor"} strokeWidth={2} strokeLinecap="round">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+  </svg>
+);
+
+const CheckCircleIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? "#3b82f6" : "none"} stroke={filled ? "#3b82f6" : "currentColor"} strokeWidth={2} strokeLinecap="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+    <polyline points="22 4 12 14.01 9 11.01" stroke={filled ? "white" : "currentColor"} strokeWidth={2} />
+  </svg>
+);
+
+const BookmarkIcon = ({ filled }: { filled: boolean }) => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinecap="round">
+    <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+  </svg>
+);
 
 /* ─── EventCard ──────────────────────────────── */
 
-function EventCard({ event, status }: { event: OfflineEvent; status: EventStatus }) {
+function EventCard({
+  event,
+  status,
+  isLoggedIn,
+}: {
+  event: OfflineEvent;
+  status: EventStatus;
+  isLoggedIn: boolean;
+}) {
   const router = useRouter();
+  const { setLoading } = usePageLoading();
   const badge = STATUS_BADGE[status];
 
+  const [liked, setLiked] = useState(false);
+  const [joined, setJoined] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+
+  const guard = (action: () => void) => {
+    if (!isLoggedIn) { setShowLoginModal(true); return; }
+    action();
+  };
+
+  const handleCardClick = () => {
+    if (!isLoggedIn) { setShowLoginModal(true); return; }
+    setLoading(true);
+    router.push(`/offline/${event.id}`);
+  };
+
   return (
-    <div
-      onClick={() => router.push(`/offline/${event.id}`)}
-      className="bg-white rounded-2xl border border-stone-100 overflow-hidden shadow-sm cursor-pointer active:scale-[0.99] transition-transform"
-    >
-      {/* 포스터 */}
-      <div className="aspect-4/3 bg-stone-100 flex items-center justify-center text-stone-300 text-sm relative">
-        포스터
-        <span className={`absolute top-3 left-3 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${badge.className}`}>
-          {badge.label}
-        </span>
-      </div>
-
-      {/* 정보 */}
-      <div className="px-4 py-3 space-y-1.5">
-        <p className="text-sm font-bold text-stone-800">{event.title}</p>
-
-        <div className="flex items-center gap-1.5 text-xs text-stone-500">
-          <CalendarIcon />
-          <span>{formatDate(event.startDate)} ~ {formatDate(event.endDate)}</span>
+    <>
+      <div
+        onClick={handleCardClick}
+        className="bg-white rounded-2xl border border-stone-100 overflow-hidden shadow-sm cursor-pointer active:scale-[0.99] transition-transform"
+      >
+        {/* 포스터 — 3:4 세로 비율 */}
+        <div className="aspect-3/4 bg-stone-100 flex items-center justify-center text-stone-300 text-sm relative">
+          포스터
+          <span className={`absolute top-3 left-3 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${badge.className}`}>
+            {badge.label}
+          </span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-stone-500">
-          <ClockIcon />
-          <span>{event.startTime} ~ {event.endTime}</span>
+        {/* 정보 */}
+        <div className="px-4 py-3 space-y-1.5">
+          <p className="text-sm font-bold text-stone-800">{event.title}</p>
+
+          <div className="flex items-center gap-1.5 text-xs text-stone-500">
+            <CalendarIcon />
+            <span>{formatDate(event.startDate)} ~ {formatDate(event.endDate)}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 text-xs text-stone-500">
+            <ClockIcon />
+            <span>{event.startTime} ~ {event.endTime}</span>
+          </div>
+
+          <button
+            onClick={(e) => { e.stopPropagation(); alert("지도 서비스 준비 중입니다."); }}
+            className="flex items-center gap-1.5 text-xs text-stone-500 text-left"
+          >
+            <MapPinIcon />
+            <span className="underline underline-offset-2">{event.location}</span>
+          </button>
         </div>
 
-        <button
-          onClick={(e) => { e.stopPropagation(); alert("지도 서비스 준비 중입니다."); }}
-          className="flex items-center gap-1.5 text-xs text-stone-500 text-left"
-        >
-          <MapPinIcon />
-          <span className="underline underline-offset-2">{event.location}</span>
-        </button>
+        {/* 액션 버튼 */}
+        <div className="flex border-t border-stone-100 divide-x divide-stone-100">
+          <button
+            onClick={(e) => { e.stopPropagation(); guard(() => setLiked((v) => !v)); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+              liked ? "text-red-500 bg-red-50" : "text-stone-400 bg-white"
+            }`}
+          >
+            <HeartIcon filled={liked} />
+            좋아요
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); guard(() => setJoined((v) => !v)); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+              joined ? "text-blue-500 bg-blue-50" : "text-stone-400 bg-white"
+            }`}
+          >
+            <CheckCircleIcon filled={joined} />
+            참여
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); guard(() => setBookmarked((v) => !v)); }}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-3 text-xs font-medium transition-colors ${
+              bookmarked ? "text-point bg-point/5" : "text-stone-400 bg-white"
+            }`}
+          >
+            <BookmarkIcon filled={bookmarked} />
+            북마크
+          </button>
+        </div>
       </div>
-    </div>
+
+      {showLoginModal && <LoginRequiredModal onClose={() => setShowLoginModal(false)} />}
+    </>
   );
 }
 
 /* ─── OfflineListView ────────────────────────── */
 
-export default function OfflineListView() {
+interface Props {
+  isLoggedIn: boolean;
+}
+
+export default function OfflineListView({ isLoggedIn }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showFilter, setShowFilter] = useState(false);
@@ -184,6 +267,7 @@ export default function OfflineListView() {
               key={event.id}
               event={event}
               status={getEventStatus(event.startDate, event.endDate)}
+              isLoggedIn={isLoggedIn}
             />
           ))
         )}

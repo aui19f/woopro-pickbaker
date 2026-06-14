@@ -11,6 +11,16 @@ export type OfflineEvent = {
     instagram?: string;
     facebook?: string;
   };
+  likeCount: number;
+  joinCount: number;
+  bookmarkCount: number;
+};
+
+export type OfflineComment = {
+  id: string;
+  username: string;
+  content: string;
+  time: string;
 };
 
 export type EventStatus = "ongoing" | "upcoming" | "past";
@@ -48,6 +58,9 @@ export const MOCK_EVENTS: OfflineEvent[] = [
       website: "https://example.com",
       instagram: "https://instagram.com/bakingfest",
     },
+    likeCount: 128,
+    joinCount: 47,
+    bookmarkCount: 83,
   },
   {
     id: "2",
@@ -61,6 +74,9 @@ export const MOCK_EVENTS: OfflineEvent[] = [
       instagram: "https://instagram.com/busanbread",
       facebook: "https://facebook.com/busanbread",
     },
+    likeCount: 64,
+    joinCount: 31,
+    bookmarkCount: 42,
   },
   {
     id: "3",
@@ -74,6 +90,9 @@ export const MOCK_EVENTS: OfflineEvent[] = [
       website: "https://example.com",
       instagram: "https://instagram.com/dessertweek",
     },
+    likeCount: 215,
+    joinCount: 89,
+    bookmarkCount: 156,
   },
   {
     id: "4",
@@ -87,5 +106,24 @@ export const MOCK_EVENTS: OfflineEvent[] = [
       website: "https://example.com",
       facebook: "https://facebook.com/kbakery",
     },
+    likeCount: 93,
+    joinCount: 52,
+    bookmarkCount: 71,
   },
 ];
+
+export const MOCK_OFFLINE_COMMENTS: Record<string, OfflineComment[]> = {
+  "1": [
+    { id: "c1", username: "baker_pro", content: "저도 참가 신청했어요! 너무 기대됩니다 🎉", time: "2시간 전" },
+    { id: "c2", username: "bread_lover", content: "매년 가는 행사인데 올해도 기대됩니다!", time: "5시간 전" },
+    { id: "c3", username: "sweet_sugar", content: "코엑스라 가기 편하겠네요. 꼭 가봐야겠어요!", time: "1일 전" },
+  ],
+  "2": [
+    { id: "c4", username: "croissant_king", content: "부산까지 가야겠네요 ㅎㅎ 빵 문화 축제 항상 퀄리티 좋더라구요!", time: "3시간 전" },
+  ],
+  "3": [],
+  "4": [
+    { id: "c5", username: "choco_cake", content: "킨텍스 박람회 늘 퀄리티 좋더라구요!", time: "4일 전" },
+    { id: "c6", username: "vanilla_bake", content: "입장료는 얼마인지 아시는 분?", time: "5일 전" },
+  ],
+};

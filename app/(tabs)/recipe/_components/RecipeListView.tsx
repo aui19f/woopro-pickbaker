@@ -37,7 +37,11 @@ const CloseIcon = () => (
 
 /* ─── RecipeListView ─────────────────────────── */
 
-export default function RecipeListView() {
+interface Props {
+  isLoggedIn: boolean;
+}
+
+export default function RecipeListView({ isLoggedIn }: Props) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<CategoryFilter>("전체");
   const [showOptions, setShowOptions] = useState(false);
@@ -123,7 +127,7 @@ export default function RecipeListView() {
         {filtered.length === 0 ? (
           <p className="text-center text-stone-400 text-sm py-16">검색 결과가 없습니다.</p>
         ) : (
-          filtered.map((r) => <RecipeCard key={r.id} recipe={r} />)
+          filtered.map((r) => <RecipeCard key={r.id} recipe={r} isLoggedIn={isLoggedIn} />)
         )}
       </div>
 
@@ -145,7 +149,7 @@ export default function RecipeListView() {
 
             {/* 헤더 */}
             <div className="flex items-center justify-between px-4 pt-4 pb-3">
-              <p className="text-base font-bold text-stone-800">검색 옵션</p>
+              <p className="text-[16px] font-bold text-stone-800">검색 옵션</p>
               <button
                 onClick={closeOptions}
                 className="w-9 h-9 rounded-full bg-stone-100 flex items-center justify-center text-stone-500"
