@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
+import LogoutButton from "@/app/_components/LogoutButton";
+
+const MENU_ITEMS = ["내 게시글", "북마크", "팔로잉", "알림 설정"] as const;
 
 export default async function MyPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,7 +17,6 @@ export default async function MyPage({ params }: { params: Promise<{ id: string 
 
   return (
     <div className="px-4 pt-6">
-      {/* 프로필 */}
       <div className="flex items-center gap-4 bg-white rounded-2xl border border-stone-100 px-5 py-5 shadow-sm">
         <div className="w-16 h-16 rounded-full bg-stone-100 shrink-0 flex items-center justify-center text-2xl font-bold text-stone-300">
           {profile.nickname.charAt(0).toUpperCase()}
@@ -25,9 +27,8 @@ export default async function MyPage({ params }: { params: Promise<{ id: string 
         </div>
       </div>
 
-      {/* 메뉴 */}
       <div className="mt-4 bg-white rounded-2xl border border-stone-100 divide-y divide-stone-100 shadow-sm">
-        {["내 게시글", "북마크", "팔로잉", "알림 설정", "로그아웃"].map((item) => (
+        {MENU_ITEMS.map((item) => (
           <button
             key={item}
             className="w-full flex items-center justify-between px-5 py-4 text-sm text-stone-700"
@@ -38,6 +39,7 @@ export default async function MyPage({ params }: { params: Promise<{ id: string 
             </svg>
           </button>
         ))}
+        <LogoutButton />
       </div>
     </div>
   );

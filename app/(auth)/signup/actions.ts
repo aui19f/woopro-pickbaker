@@ -11,25 +11,34 @@ export async function signupAction(
   _prev: SignupState,
   formData: FormData
 ): Promise<SignupState> {
-  const result = await signupSchema.safeParseAsync({
-    username: formData.get("username"),
+  const rawUsername = (formData.get("username") as string) ?? "";
+  const rawNickname = (formData.get("nickname") as string) ?? "";
+
+  const result = signupSchema.safeParse({
+    email: formData.get("email"),
+    username: rawUsername,
     password: formData.get("password"),
-    nickname: formData.get("nickname"),
+    confirmPassword: formData.get("confirmPassword"),
+    nickname: rawNickname || undefined,
+    role: formData.get("role") || "USER",
   });
 
   if (!result.success) {
     return { status: 400, message: result.error.errors[0]?.message ?? "입력값을 확인해주세요." };
   }
 
-  const { username, password, nickname } = result.data;
+  const { email, username, password, role } = result.data;
+  const nickname = result.data.nickname || username;
 
-  // 아이디 중복 확인
-  const existing = await prisma.user.findUnique({ where: { username } });
-  if (existing) {
+  const existingUsername = await prisma.user.findUnique({ where: { username } });
+  if (existingUsername) {
     return { status: 409, message: "이미 사용 중인 아이디입니다." };
   }
 
-  const email = `${username}@app.pickbaker`;
+  const existingEmail = await prisma.user.findUnique({ where: { email } });
+  if (existingEmail) {
+    return { status: 409, message: "이미 사용 중인 이메일입니다." };
+  }
 
   try {
     const supabase = createSupabaseAdminClient();
@@ -38,6 +47,7 @@ export async function signupAction(
       email,
       password,
       email_confirm: true,
+      user_metadata: { username, role, status: "ACTIVE" },
     });
 
     if (authError) {
@@ -50,8 +60,10 @@ export async function signupAction(
     await prisma.user.create({
       data: {
         auth_id: authData.user.id,
+        email,
         username,
         nickname,
+        role,
       },
     });
   } catch (error) {

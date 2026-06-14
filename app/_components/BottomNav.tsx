@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const FeedIcon = ({ active }: { active: boolean }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -41,79 +42,141 @@ const MyPageIcon = ({ active }: { active: boolean }) => (
 );
 
 const NAV_ITEMS = [
-  { label: "피드",    href: "/feed",    Icon: FeedIcon    },
-  { label: "레시피",  href: "/recipe",  Icon: RecipeIcon  },
+  { label: "피드",     href: "/feed",    Icon: FeedIcon    },
+  { label: "레시피",   href: "/recipe",  Icon: RecipeIcon  },
   { label: "오프라인", href: "/offline", Icon: OfflineIcon },
 ] as const;
 
 interface BottomNavProps {
   userId?: string;
+  role?: string;
 }
 
-export default function BottomNav({ userId }: BottomNavProps) {
+export default function BottomNav({ userId, role }: BottomNavProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [showModal, setShowModal] = useState(false);
+
   const isActive = (href: string) => pathname.startsWith(href);
+  const isMyPage = userId
+    ? pathname === `/${userId}` || pathname.startsWith(`/${userId}/`)
+    : false;
 
   const mypageHref = userId ? `/${userId}` : "/login";
-  const mypageActive = userId ? pathname.startsWith(`/${userId}`) : false;
+  const mypageActive = isMyPage;
+
+  const modalOptions = () => {
+    const base = [
+      { label: "피드",   href: "/write/feed"    },
+      { label: "레시피", href: "/write/recipe"  },
+    ];
+    if (isMyPage && role === "ADMIN") {
+      return [...base, { label: "오프라인", href: "/write/offline" }];
+    }
+    return base;
+  };
+
+  const handleWrite = () => {
+    if (pathname.startsWith("/feed")) {
+      router.push("/write/feed");
+    } else if (pathname.startsWith("/recipe")) {
+      router.push("/write/recipe");
+    } else if (pathname.startsWith("/offline")) {
+      if (role === "ADMIN") {
+        router.push("/write/offline");
+      } else {
+        setShowModal(true);
+      }
+    } else {
+      // 마이페이지 또는 기타
+      setShowModal(true);
+    }
+  };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-stone-200 flex items-center z-50">
-      {/* 피드 · 레시피 */}
-      {NAV_ITEMS.slice(0, 2).map(({ label, href, Icon }) => {
-        const active = isActive(href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
-              active ? "text-point" : "text-stone-400"
-            }`}
-          >
-            <Icon active={active} />
-            <span className="text-[10px] font-medium">{label}</span>
-          </Link>
-        );
-      })}
+    <>
+      {/* 글쓰기 타입 선택 모달 */}
+      {showModal && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-50"
+            onClick={() => setShowModal(false)}
+          />
+          <div className="fixed bottom-16 left-0 right-0 bg-white rounded-t-2xl px-4 pt-4 pb-6 z-50">
+            <p className="text-xs text-stone-400 mb-3 text-center">어디에 글을 쓸까요?</p>
+            <div className="flex gap-3">
+              {modalOptions().map(({ label, href }) => (
+                <button
+                  key={href}
+                  onClick={() => { router.push(href); setShowModal(false); }}
+                  className="flex-1 h-14 rounded-2xl bg-stone-50 border border-stone-200 text-sm font-semibold text-stone-700 active:bg-stone-100 transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
-      {/* 글쓰기 — 중앙 특별 버튼 */}
-      <Link
-        href="/write"
-        className="flex flex-col items-center justify-center flex-1 h-full"
-      >
-        <div className="w-11 h-11 rounded-2xl bg-point flex items-center justify-center shadow-md text-white">
-          <WriteIcon />
-        </div>
-        <span className="text-[10px] font-medium text-point mt-0.5">글쓰기</span>
-      </Link>
+      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-stone-200 flex items-center z-40">
+        {/* 피드 · 레시피 */}
+        {NAV_ITEMS.slice(0, 2).map(({ label, href, Icon }) => {
+          const active = isActive(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
+                active ? "text-point" : "text-stone-400"
+              }`}
+            >
+              <Icon active={active} />
+              <span className="text-[10px] font-medium">{label}</span>
+            </Link>
+          );
+        })}
 
-      {/* 오프라인 */}
-      {NAV_ITEMS.slice(2).map(({ label, href, Icon }) => {
-        const active = isActive(href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
-              active ? "text-point" : "text-stone-400"
-            }`}
-          >
-            <Icon active={active} />
-            <span className="text-[10px] font-medium">{label}</span>
-          </Link>
-        );
-      })}
+        {/* 글쓰기 — 중앙 버튼 */}
+        <button
+          type="button"
+          onClick={handleWrite}
+          className="flex flex-col items-center justify-center flex-1 h-full"
+        >
+          <div className="w-11 h-11 rounded-2xl bg-point flex items-center justify-center shadow-md text-white">
+            <WriteIcon />
+          </div>
+          <span className="text-[10px] font-medium text-point mt-0.5">글쓰기</span>
+        </button>
 
-      {/* 마이페이지 */}
-      <Link
-        href={mypageHref}
-        className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
-          mypageActive ? "text-point" : "text-stone-400"
-        }`}
-      >
-        <MyPageIcon active={mypageActive} />
-        <span className="text-[10px] font-medium">마이페이지</span>
-      </Link>
-    </nav>
+        {/* 오프라인 */}
+        {NAV_ITEMS.slice(2).map(({ label, href, Icon }) => {
+          const active = isActive(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
+                active ? "text-point" : "text-stone-400"
+              }`}
+            >
+              <Icon active={active} />
+              <span className="text-[10px] font-medium">{label}</span>
+            </Link>
+          );
+        })}
+
+        {/* 마이페이지 */}
+        <Link
+          href={mypageHref}
+          className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
+            mypageActive ? "text-point" : "text-stone-400"
+          }`}
+        >
+          <MyPageIcon active={mypageActive} />
+          <span className="text-[10px] font-medium">마이페이지</span>
+        </Link>
+      </nav>
+    </>
   );
 }
