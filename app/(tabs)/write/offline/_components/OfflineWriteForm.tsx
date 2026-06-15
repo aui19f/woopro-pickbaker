@@ -14,6 +14,14 @@ interface SiteLink {
   url: string;
 }
 
+interface OperatingPeriod {
+  id: string;
+  startDate: string;
+  endDate: string;
+  openTime: string;
+  closeTime: string;
+}
+
 const CATEGORIES: Category[] = ["카페", "인테리어", "빵", "디저트"];
 
 const LINK_OPTIONS: { type: LinkType; label: string }[] = [
@@ -71,7 +79,7 @@ function LinkIcon({ type }: { type: LinkType }) {
   return <span className="text-blue-500"><GlobeIcon /></span>;
 }
 
-/* ─── Section label ─────────────────────────────── */
+/* ─── Sub-components ────────────────────────────── */
 
 function Label({ children }: { children: string }) {
   return (
@@ -81,11 +89,9 @@ function Label({ children }: { children: string }) {
   );
 }
 
-/* ─── Card wrapper ──────────────────────────────── */
-
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className={`bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden ${className}`}>
+    <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
       {children}
     </div>
   );
@@ -108,22 +114,39 @@ export default function OfflineWriteForm() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [title, setTitle]       = useState("");
   const [category, setCategory] = useState<Category | "">("");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate]     = useState("");
-  const [openTime, setOpenTime]   = useState("");
-  const [closeTime, setCloseTime] = useState("");
+  const [periods, setPeriods]   = useState<OperatingPeriod[]>([
+    { id: "init", startDate: "", endDate: "", openTime: "", closeTime: "" },
+  ]);
   const [location, setLocation]   = useState("");
   const [admission, setAdmission] = useState("");
   const [memo, setMemo]           = useState("");
   const [links, setLinks]         = useState<SiteLink[]>([]);
   const [showLinkPicker, setShowLinkPicker] = useState(false);
 
+  /* image */
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImagePreview(URL.createObjectURL(file));
     e.target.value = "";
   };
+
+  /* periods */
+  const addPeriod = () =>
+    setPeriods((prev) => [
+      ...prev,
+      { id: Date.now().toString(), startDate: "", endDate: "", openTime: "", closeTime: "" },
+    ]);
+
+  const removePeriod = (id: string) =>
+    setPeriods((prev) => prev.filter((p) => p.id !== id));
+
+  const updatePeriod = (id: string, field: keyof Omit<OperatingPeriod, "id">, value: string) =>
+    setPeriods((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
+
+  /* links — filter out already-added types from picker */
+  const addedTypes = new Set(links.map((l) => l.type));
+  const availableLinkOptions = LINK_OPTIONS.filter(({ type }) => !addedTypes.has(type));
 
   const addLink = (type: LinkType) => {
     setLinks((prev) => [...prev, { id: Date.now().toString(), type, url: "" }]);
@@ -145,26 +168,19 @@ export default function OfflineWriteForm() {
     <>
       {/* 헤더 */}
       <div className="sticky top-0 bg-white border-b border-stone-100 flex items-center px-5 h-14 z-10">
-        <button
-          onClick={() => router.back()}
-          className="text-sm text-stone-400 font-medium w-10"
-        >
+        <button onClick={() => router.back()} className="text-sm text-stone-400 font-medium w-10">
           취소
         </button>
-        <p className="flex-1 text-center text-sm font-bold text-stone-800">
-          오프라인 행사 등록
-        </p>
-        <button
-          onClick={handleSubmit}
-          className="text-sm text-point font-bold w-10 text-right"
-        >
+        <p className="flex-1 text-center text-sm font-bold text-stone-800">오프라인 행사 등록</p>
+        <button onClick={handleSubmit} className="text-sm text-point font-bold w-10 text-right">
           등록
         </button>
       </div>
 
-      <div className="px-4 py-4 space-y-3.5">
+      {/* 본문 — 노트북에서도 읽기 좋도록 최대 너비 제한 */}
+      <div className="max-w-lg mx-auto px-4 py-4 space-y-3.5">
 
-        {/* 포스터 이미지 */}
+        {/* 포스터 — 세로 과도한 확장 방지: 너비 최대 320px로 제한 */}
         <input
           ref={imageInputRef}
           type="file"
@@ -173,34 +189,36 @@ export default function OfflineWriteForm() {
           onChange={handleImageChange}
         />
 
-        {imagePreview ? (
-          <div className="relative w-full aspect-3/4 rounded-2xl overflow-hidden bg-stone-100">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imagePreview} alt="포스터" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent flex items-end justify-center pb-4">
+        <div className="max-w-[320px] mx-auto">
+          {imagePreview ? (
+            <div className="relative w-full aspect-3/4 rounded-2xl overflow-hidden bg-stone-100">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imagePreview} alt="포스터" className="w-full h-full object-cover" />
+              <div className="absolute inset-0 bg-linear-to-t from-black/30 to-transparent flex items-end justify-center pb-4">
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  className="px-5 py-2 rounded-full bg-white/90 text-xs font-semibold text-stone-700 shadow-sm"
+                >
+                  이미지 변경
+                </button>
+              </div>
               <button
-                onClick={() => imageInputRef.current?.click()}
-                className="px-5 py-2 rounded-full bg-white/90 text-xs font-semibold text-stone-700 shadow-sm"
+                onClick={() => setImagePreview(null)}
+                className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center text-white"
               >
-                이미지 변경
+                <XSmIcon />
               </button>
             </div>
+          ) : (
             <button
-              onClick={() => setImagePreview(null)}
-              className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center text-white"
+              onClick={() => imageInputRef.current?.click()}
+              className="w-full aspect-3/4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50 flex flex-col items-center justify-center gap-3 text-stone-300 active:bg-stone-100 transition-colors"
             >
-              <XSmIcon />
+              <ImagePlaceholderIcon />
+              <span className="text-sm font-medium">포스터 이미지 추가</span>
             </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => imageInputRef.current?.click()}
-            className="w-full aspect-3/4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50 flex flex-col items-center justify-center gap-3 text-stone-300 active:bg-stone-100 transition-colors"
-          >
-            <ImagePlaceholderIcon />
-            <span className="text-sm font-medium text-stone-300">포스터 이미지 추가</span>
-          </button>
-        )}
+          )}
+        </div>
 
         {/* 기본 정보 */}
         <Card>
@@ -234,43 +252,73 @@ export default function OfflineWriteForm() {
           </CardRow>
         </Card>
 
-        {/* 일정 */}
+        {/* 기간 및 운영시간 — 기간별 복수 설정 */}
         <Card>
           <CardRow>
-            <Label>기간</Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="flex-1 min-w-0 text-sm text-stone-700 outline-none bg-stone-50 rounded-xl px-3 py-2 border border-stone-100"
-              />
-              <span className="text-stone-300 text-sm shrink-0">~</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="flex-1 min-w-0 text-sm text-stone-700 outline-none bg-stone-50 rounded-xl px-3 py-2 border border-stone-100"
-              />
+            <div className="flex items-center justify-between mb-2">
+              <Label>기간 및 운영시간</Label>
             </div>
-          </CardRow>
-          <CardRow>
-            <Label>운영 시간</Label>
-            <div className="flex items-center gap-2">
-              <input
-                type="time"
-                value={openTime}
-                onChange={(e) => setOpenTime(e.target.value)}
-                className="flex-1 min-w-0 text-sm text-stone-700 outline-none bg-stone-50 rounded-xl px-3 py-2 border border-stone-100"
-              />
-              <span className="text-stone-300 text-sm shrink-0">~</span>
-              <input
-                type="time"
-                value={closeTime}
-                onChange={(e) => setCloseTime(e.target.value)}
-                className="flex-1 min-w-0 text-sm text-stone-700 outline-none bg-stone-50 rounded-xl px-3 py-2 border border-stone-100"
-              />
+
+            <div className="space-y-2.5">
+              {periods.map((period, idx) => (
+                <div key={period.id} className="bg-stone-50 rounded-xl p-3 relative">
+                  {/* 기간 번호 + 삭제 */}
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-bold text-stone-400">기간 {idx + 1}</span>
+                    {periods.length > 1 && (
+                      <button
+                        onClick={() => removePeriod(period.id)}
+                        className="w-6 h-6 rounded-full bg-stone-200 flex items-center justify-center text-stone-400 active:bg-stone-300 transition-colors"
+                      >
+                        <XSmIcon />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* 날짜 */}
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <input
+                      type="date"
+                      value={period.startDate}
+                      onChange={(e) => updatePeriod(period.id, "startDate", e.target.value)}
+                      className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-white rounded-lg px-2.5 py-2 border border-stone-100"
+                    />
+                    <span className="text-stone-300 text-xs shrink-0">~</span>
+                    <input
+                      type="date"
+                      value={period.endDate}
+                      onChange={(e) => updatePeriod(period.id, "endDate", e.target.value)}
+                      className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-white rounded-lg px-2.5 py-2 border border-stone-100"
+                    />
+                  </div>
+
+                  {/* 운영 시간 */}
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="time"
+                      value={period.openTime}
+                      onChange={(e) => updatePeriod(period.id, "openTime", e.target.value)}
+                      className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-white rounded-lg px-2.5 py-2 border border-stone-100"
+                    />
+                    <span className="text-stone-300 text-xs shrink-0">~</span>
+                    <input
+                      type="time"
+                      value={period.closeTime}
+                      onChange={(e) => updatePeriod(period.id, "closeTime", e.target.value)}
+                      className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-white rounded-lg px-2.5 py-2 border border-stone-100"
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
+
+            <button
+              onClick={addPeriod}
+              className="flex items-center gap-1.5 text-sm text-point font-semibold mt-3"
+            >
+              <PlusIcon />
+              기간 추가
+            </button>
           </CardRow>
         </Card>
 
@@ -278,6 +326,7 @@ export default function OfflineWriteForm() {
         <Card>
           <CardRow>
             <Label>장소</Label>
+            {/* TODO: 지도 API 연동 예정 */}
             <input
               type="text"
               value={location}
@@ -340,13 +389,16 @@ export default function OfflineWriteForm() {
               </div>
             )}
 
-            <button
-              onClick={() => setShowLinkPicker(true)}
-              className="flex items-center gap-1.5 text-sm text-point font-semibold"
-            >
-              <PlusIcon />
-              링크 추가
-            </button>
+            {/* 모든 링크 타입이 추가되면 버튼 숨김 */}
+            {availableLinkOptions.length > 0 && (
+              <button
+                onClick={() => setShowLinkPicker(true)}
+                className="flex items-center gap-1.5 text-sm text-point font-semibold"
+              >
+                <PlusIcon />
+                링크 추가
+              </button>
+            )}
           </CardRow>
         </Card>
 
@@ -359,7 +411,7 @@ export default function OfflineWriteForm() {
         </button>
       </div>
 
-      {/* 링크 타입 선택 바텀 시트 */}
+      {/* 링크 타입 선택 바텀 시트 — 이미 추가된 타입은 표시 안 함 */}
       {showLinkPicker && (
         <>
           <div
@@ -370,7 +422,7 @@ export default function OfflineWriteForm() {
             <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
             <p className="text-xs text-stone-400 text-center mb-3">링크 유형을 선택하세요</p>
             <div className="flex flex-col gap-2">
-              {LINK_OPTIONS.map(({ type, label }) => (
+              {availableLinkOptions.map(({ type, label }) => (
                 <button
                   key={type}
                   onClick={() => addLink(type)}
