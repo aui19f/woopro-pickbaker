@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 
 /* ─── Types ─────────────────────────────────────── */
@@ -14,14 +14,6 @@ interface SiteLink {
   url: string;
 }
 
-interface OperatingPeriod {
-  id: string;
-  startDate: string;
-  endDate: string;
-  openTime: string;
-  closeTime: string;
-}
-
 const CATEGORIES: Category[] = ["카페", "인테리어", "빵", "디저트"];
 
 const LINK_OPTIONS: { type: LinkType; label: string }[] = [
@@ -29,6 +21,27 @@ const LINK_OPTIONS: { type: LinkType; label: string }[] = [
   { type: "twitter",   label: "트위터 (X)" },
   { type: "website",   label: "공식 사이트" },
 ];
+
+const DAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+/* ─── Date helpers ───────────────────────────────── */
+
+function getDatesInRange(start: string, end: string): string[] {
+  if (!start || !end || start > end) return [];
+  const dates: string[] = [];
+  const cur = new Date(start + "T00:00:00");
+  const last = new Date(end + "T00:00:00");
+  while (cur <= last) {
+    dates.push(cur.toISOString().split("T")[0]);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
+
+function dayLabel(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return `${d.getDate()}일/${DAY_KO[d.getDay()]}`;
+}
 
 /* ─── Icons ─────────────────────────────────────── */
 
@@ -49,6 +62,12 @@ const XSmIcon = () => (
 const PlusIcon = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
     <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={3.5} strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
@@ -105,6 +124,43 @@ function CardRow({ children, className = "" }: { children: React.ReactNode; clas
   );
 }
 
+function TimeRow({
+  label,
+  open,
+  close,
+  onOpen,
+  onClose,
+}: {
+  label?: string;
+  open: string;
+  close: string;
+  onOpen: (v: string) => void;
+  onClose: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      {label && (
+        <span className="text-xs font-bold text-stone-500 w-14 shrink-0 tabular-nums">
+          {label}
+        </span>
+      )}
+      <input
+        type="time"
+        value={open}
+        onChange={(e) => onOpen(e.target.value)}
+        className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-stone-50 rounded-xl px-2.5 py-2 border border-stone-100"
+      />
+      <span className="text-stone-300 text-xs shrink-0">~</span>
+      <input
+        type="time"
+        value={close}
+        onChange={(e) => onClose(e.target.value)}
+        className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-stone-50 rounded-xl px-2.5 py-2 border border-stone-100"
+      />
+    </div>
+  );
+}
+
 /* ─── OfflineWriteForm ──────────────────────────── */
 
 export default function OfflineWriteForm() {
@@ -114,16 +170,36 @@ export default function OfflineWriteForm() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [title, setTitle]       = useState("");
   const [category, setCategory] = useState<Category | "">("");
-  const [periods, setPeriods]   = useState<OperatingPeriod[]>([
-    { id: "init", startDate: "", endDate: "", openTime: "", closeTime: "" },
-  ]);
+
+  /* 기간 */
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate]     = useState("");
+
+  /* 운영시간 */
+  const [sameTime, setSameTime]     = useState(true);
+  const [unifiedOpen, setUnifiedOpen]   = useState("");
+  const [unifiedClose, setUnifiedClose] = useState("");
+  const [dailyTimes, setDailyTimes] = useState<Record<string, { open: string; close: string }>>({});
+
   const [location, setLocation]   = useState("");
   const [admission, setAdmission] = useState("");
   const [memo, setMemo]           = useState("");
   const [links, setLinks]         = useState<SiteLink[]>([]);
   const [showLinkPicker, setShowLinkPicker] = useState(false);
 
-  /* image */
+  /* 날짜 범위 계산 */
+  const datesInRange = useMemo(() => getDatesInRange(startDate, endDate), [startDate, endDate]);
+
+  const getDaily = (date: string, field: "open" | "close") =>
+    dailyTimes[date]?.[field] ?? "";
+
+  const updateDaily = (date: string, field: "open" | "close", value: string) =>
+    setDailyTimes((prev) => ({
+      ...prev,
+      [date]: { open: prev[date]?.open ?? "", close: prev[date]?.close ?? "", [field]: value },
+    }));
+
+  /* 이미지 */
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -131,20 +207,7 @@ export default function OfflineWriteForm() {
     e.target.value = "";
   };
 
-  /* periods */
-  const addPeriod = () =>
-    setPeriods((prev) => [
-      ...prev,
-      { id: Date.now().toString(), startDate: "", endDate: "", openTime: "", closeTime: "" },
-    ]);
-
-  const removePeriod = (id: string) =>
-    setPeriods((prev) => prev.filter((p) => p.id !== id));
-
-  const updatePeriod = (id: string, field: keyof Omit<OperatingPeriod, "id">, value: string) =>
-    setPeriods((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
-
-  /* links — filter out already-added types from picker */
+  /* 링크 */
   const addedTypes = new Set(links.map((l) => l.type));
   const availableLinkOptions = LINK_OPTIONS.filter(({ type }) => !addedTypes.has(type));
 
@@ -152,10 +215,8 @@ export default function OfflineWriteForm() {
     setLinks((prev) => [...prev, { id: Date.now().toString(), type, url: "" }]);
     setShowLinkPicker(false);
   };
-
   const updateLink = (id: string, url: string) =>
     setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, url } : l)));
-
   const removeLink = (id: string) =>
     setLinks((prev) => prev.filter((l) => l.id !== id));
 
@@ -177,17 +238,10 @@ export default function OfflineWriteForm() {
         </button>
       </div>
 
-      {/* 본문 — 노트북에서도 읽기 좋도록 최대 너비 제한 */}
       <div className="max-w-lg mx-auto px-4 py-4 space-y-3.5">
 
-        {/* 포스터 — 세로 과도한 확장 방지: 너비 최대 320px로 제한 */}
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleImageChange}
-        />
+        {/* 포스터 */}
+        <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
 
         <div className="max-w-[320px] mx-auto">
           {imagePreview ? (
@@ -252,73 +306,77 @@ export default function OfflineWriteForm() {
           </CardRow>
         </Card>
 
-        {/* 기간 및 운영시간 — 기간별 복수 설정 */}
+        {/* 기간 + 운영시간 */}
         <Card>
           <CardRow>
-            <div className="flex items-center justify-between mb-2">
-              <Label>기간 및 운영시간</Label>
+            {/* 날짜 범위 (1회 설정) */}
+            <Label>기간</Label>
+            <div className="flex items-center gap-1.5 mb-4">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="flex-1 min-w-0 text-sm text-stone-700 outline-none bg-stone-50 rounded-xl px-3 py-2 border border-stone-100"
+              />
+              <span className="text-stone-300 text-sm shrink-0">~</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="flex-1 min-w-0 text-sm text-stone-700 outline-none bg-stone-50 rounded-xl px-3 py-2 border border-stone-100"
+              />
             </div>
 
-            <div className="space-y-2.5">
-              {periods.map((period, idx) => (
-                <div key={period.id} className="bg-stone-50 rounded-xl p-3 relative">
-                  {/* 기간 번호 + 삭제 */}
-                  <div className="flex items-center justify-between mb-2.5">
-                    <span className="text-[11px] font-bold text-stone-400">기간 {idx + 1}</span>
-                    {periods.length > 1 && (
-                      <button
-                        onClick={() => removePeriod(period.id)}
-                        className="w-6 h-6 rounded-full bg-stone-200 flex items-center justify-center text-stone-400 active:bg-stone-300 transition-colors"
-                      >
-                        <XSmIcon />
-                      </button>
-                    )}
-                  </div>
-
-                  {/* 날짜 */}
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <input
-                      type="date"
-                      value={period.startDate}
-                      onChange={(e) => updatePeriod(period.id, "startDate", e.target.value)}
-                      className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-white rounded-lg px-2.5 py-2 border border-stone-100"
-                    />
-                    <span className="text-stone-300 text-xs shrink-0">~</span>
-                    <input
-                      type="date"
-                      value={period.endDate}
-                      onChange={(e) => updatePeriod(period.id, "endDate", e.target.value)}
-                      className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-white rounded-lg px-2.5 py-2 border border-stone-100"
-                    />
-                  </div>
-
-                  {/* 운영 시간 */}
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="time"
-                      value={period.openTime}
-                      onChange={(e) => updatePeriod(period.id, "openTime", e.target.value)}
-                      className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-white rounded-lg px-2.5 py-2 border border-stone-100"
-                    />
-                    <span className="text-stone-300 text-xs shrink-0">~</span>
-                    <input
-                      type="time"
-                      value={period.closeTime}
-                      onChange={(e) => updatePeriod(period.id, "closeTime", e.target.value)}
-                      className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-white rounded-lg px-2.5 py-2 border border-stone-100"
-                    />
-                  </div>
+            {/* 운영시간 헤더 + 체크박스 */}
+            <div className="flex items-center justify-between mb-3">
+              <Label>운영시간</Label>
+              <button
+                onClick={() => setSameTime(!sameTime)}
+                className="flex items-center gap-1.5 shrink-0 -mt-1.5"
+              >
+                <div
+                  className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                    sameTime ? "bg-point border-point" : "bg-white border-stone-300"
+                  }`}
+                >
+                  {sameTime && <CheckIcon />}
                 </div>
-              ))}
+                <span className="text-xs font-medium text-stone-500">시간 모두 동일</span>
+              </button>
             </div>
 
-            <button
-              onClick={addPeriod}
-              className="flex items-center gap-1.5 text-sm text-point font-semibold mt-3"
-            >
-              <PlusIcon />
-              기간 추가
-            </button>
+            {/* 공통 시간 */}
+            {sameTime && (
+              <TimeRow
+                open={unifiedOpen}
+                close={unifiedClose}
+                onOpen={setUnifiedOpen}
+                onClose={setUnifiedClose}
+              />
+            )}
+
+            {/* 날짜별 시간 */}
+            {!sameTime && datesInRange.length > 0 && (
+              <div className="space-y-2">
+                {datesInRange.map((date) => (
+                  <TimeRow
+                    key={date}
+                    label={dayLabel(date)}
+                    open={getDaily(date, "open")}
+                    close={getDaily(date, "close")}
+                    onOpen={(v) => updateDaily(date, "open", v)}
+                    onClose={(v) => updateDaily(date, "close", v)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* 날짜 미입력 상태 안내 */}
+            {!sameTime && datesInRange.length === 0 && (
+              <p className="text-xs text-stone-300 text-center py-2">
+                날짜를 먼저 설정해주세요
+              </p>
+            )}
           </CardRow>
         </Card>
 
@@ -389,7 +447,6 @@ export default function OfflineWriteForm() {
               </div>
             )}
 
-            {/* 모든 링크 타입이 추가되면 버튼 숨김 */}
             {availableLinkOptions.length > 0 && (
               <button
                 onClick={() => setShowLinkPicker(true)}
@@ -411,13 +468,10 @@ export default function OfflineWriteForm() {
         </button>
       </div>
 
-      {/* 링크 타입 선택 바텀 시트 — 이미 추가된 타입은 표시 안 함 */}
+      {/* 링크 타입 선택 바텀 시트 */}
       {showLinkPicker && (
         <>
-          <div
-            className="fixed inset-0 bg-black/40 z-40"
-            onClick={() => setShowLinkPicker(false)}
-          />
+          <div className="fixed inset-0 bg-black/40 z-40" onClick={() => setShowLinkPicker(false)} />
           <div className="fixed bottom-16 left-0 right-0 bg-white rounded-t-2xl z-50 px-4 pt-4 pb-6 shadow-xl">
             <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-4" />
             <p className="text-xs text-stone-400 text-center mb-3">링크 유형을 선택하세요</p>
