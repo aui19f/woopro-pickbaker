@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MOCK_POSTS, type Post } from "../_data/mock";
-import { feedStore } from "@/lib/feedStore";
+import { type FeedPost } from "../_types";
 import PostCard from "./PostCard";
 
 interface Props {
+  posts: FeedPost[];
   isLoggedIn: boolean;
 }
 
-export default function FeedList({ isLoggedIn }: Props) {
-  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
-
-  useEffect(() => {
-    const local = feedStore.getAll();
-    if (local.length > 0) setPosts([...local, ...MOCK_POSTS]);
-  }, []);
+export default function FeedList({ posts, isLoggedIn }: Props) {
+  if (posts.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64 text-stone-300 text-sm">
+        아직 게시물이 없습니다.
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white">

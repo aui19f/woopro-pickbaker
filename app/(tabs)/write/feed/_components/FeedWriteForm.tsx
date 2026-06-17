@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { feedStore } from "@/lib/feedStore";
+import { createPost } from "../_actions";
 
 /* ─── Types ─────────────────────────────────────── */
 
@@ -59,7 +59,7 @@ const VideoIcon = () => (
 
 /* ─── FeedWriteForm ──────────────────────────────── */
 
-export default function FeedWriteForm({ username }: { username: string }) {
+export default function FeedWriteForm() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -137,23 +137,49 @@ export default function FeedWriteForm({ username }: { username: string }) {
     setShowConfirm(false);
     setUploading(true);
 
-    feedStore.add({
-      id: `local-${Date.now()}`,
-      author: { username },
-      content,
-      media: media.map((m, i) => ({
-        id: `${Date.now()}-${i}`,
-        preview: m.preview,
-        type: m.type,
-      })),
-      tags,
-      likeCount: 0,
-      commentCount: 0,
-      createdAt: "방금 전",
-    });
+    try {
+      // 1. 파일 이름 목록으로 presigned URL 요청
+      const presignRes = await fetch("/api/presigned-upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: media.map((m, i) => ({
+            name: `file-${i}.${m.type === "video" ? "mp4" : "jpg"}`,
+          })),
+        }),
+      });
+      if (!presignRes.ok) throw new Error("presigned URL 요청 실패");
+      const { results } = await presignRes.json();
 
-    await new Promise((res) => setTimeout(res, 1500));
-    router.push("/feed");
+      // 2. 각 파일을 Supabase Storage에 직접 업로드
+      const mediaUrls: { url: string; type: "IMAGE" | "VIDEO"; order: number }[] = [];
+      for (const [i, item] of media.entries()) {
+        const blob = await fetch(item.preview).then((r) => r.blob());
+        const { signedUrl, publicUrl } = results[i];
+
+        const uploadRes = await fetch(signedUrl, {
+          method: "PUT",
+          body: blob,
+          headers: { "Content-Type": blob.type },
+        });
+        if (!uploadRes.ok) throw new Error(`파일 ${i + 1} 업로드 실패`);
+
+        mediaUrls.push({
+          url: publicUrl,
+          type: item.type === "video" ? "VIDEO" : "IMAGE",
+          order: i,
+        });
+      }
+
+      // 3. DB에 포스트 생성
+      await createPost({ content, tags, media: mediaUrls });
+
+      router.push("/feed");
+    } catch (err) {
+      setUploading(false);
+      setError(err instanceof Error ? err.message : "업로드에 실패했습니다.");
+      setTimeout(() => setError(null), 4000);
+    }
   };
 
   /* 슬라이드 총 개수 (미디어 + "추가" 슬라이드) */

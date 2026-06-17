@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { type Post } from "../_data/mock";
+import { type FeedPost } from "../_types";
+import { toggleLike, toggleBookmark } from "../_actions";
 import ImageSlider from "./ImageSlider";
 import CommentModal from "./CommentModal";
 import LoginRequiredModal from "@/app/_components/LoginRequiredModal";
@@ -41,10 +42,10 @@ const DotsIcon = () => (
 
 /* ─── PostCard ───────────────────────────────── */
 
-export default function PostCard({ post, isLoggedIn }: { post: Post; isLoggedIn: boolean }) {
-  const [liked, setLiked] = useState(false);
+export default function PostCard({ post, isLoggedIn }: { post: FeedPost; isLoggedIn: boolean }) {
+  const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
-  const [bookmarked, setBookmarked] = useState(false);
+  const [bookmarked, setBookmarked] = useState(post.isBookmarked);
   const [expanded, setExpanded] = useState(false);
   const [isTruncated, setIsTruncated] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -62,9 +63,15 @@ export default function PostCard({ post, isLoggedIn }: { post: Post; isLoggedIn:
     action();
   };
 
-  const toggleLike = () => {
+  const handleToggleLike = async () => {
     setLiked((v) => !v);
     setLikeCount((c) => (liked ? c - 1 : c + 1));
+    await toggleLike(post.id);
+  };
+
+  const handleToggleBookmark = async () => {
+    setBookmarked((v) => !v);
+    await toggleBookmark(post.id);
   };
 
   const handleShare = async () => {
@@ -93,7 +100,7 @@ export default function PostCard({ post, isLoggedIn }: { post: Post; isLoggedIn:
 
       {/* 액션 버튼 */}
       <div className="flex items-center px-3 py-2">
-        <button onClick={() => guard(toggleLike)} className="p-1">
+        <button onClick={() => guard(handleToggleLike)} className="p-1">
           <HeartIcon filled={liked} />
         </button>
         <button onClick={() => guard(() => setShowComments(true))} className="p-1 ml-1">
@@ -102,7 +109,7 @@ export default function PostCard({ post, isLoggedIn }: { post: Post; isLoggedIn:
         <button onClick={handleShare} className="p-1 ml-1">
           <ShareIcon />
         </button>
-        <button onClick={() => guard(() => setBookmarked((v) => !v))} className="p-1 ml-auto">
+        <button onClick={() => guard(handleToggleBookmark)} className="p-1 ml-auto">
           <BookmarkIcon filled={bookmarked} />
         </button>
       </div>
@@ -129,9 +136,9 @@ export default function PostCard({ post, isLoggedIn }: { post: Post; isLoggedIn:
       </div>
 
       {/* 태그 */}
-      {post.tags && post.tags.length > 0 && (
+      {post.tags.length > 0 && (
         <div className="px-4 pb-1 flex flex-wrap gap-x-2 gap-y-0.5">
-          {post.tags.map((tag) => (
+          {post.tags.map((tag: string) => (
             <span key={tag} className="text-xs text-point font-medium">#{tag}</span>
           ))}
         </div>

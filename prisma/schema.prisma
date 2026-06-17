@@ -9,17 +9,6 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum EnumRole {
-  USER
-  OWNER
-  ADMIN
-}
-
-enum EnumUserStatus {
-  ACTIVE
-  WITHDRAWN
-}
-
 model User {
   id         String         @id @default(cuid())
   auth_id    String         @unique
@@ -30,4 +19,85 @@ model User {
   status     EnumUserStatus @default(ACTIVE)
   created_at DateTime       @default(now())
   updated_at DateTime       @updatedAt
+
+  posts     Post[]
+  comments  PostComment[]
+  likes     PostLike[]
+  bookmarks PostBookmark[]
+}
+
+model Post {
+  id         String        @id @default(cuid())
+  author_id  String
+  author     User          @relation(fields: [author_id], references: [id])
+  content    String        @db.Text
+  media      PostMedia[]
+  tags       PostTag[]
+  likes      PostLike[]
+  comments   PostComment[]
+  bookmarks  PostBookmark[]
+  created_at DateTime      @default(now())
+  updated_at DateTime      @updatedAt
+}
+
+model PostMedia {
+  id      String    @id @default(cuid())
+  post_id String
+  post    Post      @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  url     String
+  type    MediaType @default(IMAGE)
+  order   Int       @default(0)
+}
+
+model PostTag {
+  id      String @id @default(cuid())
+  post_id String
+  post    Post   @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  name    String
+}
+
+model PostComment {
+  id         String   @id @default(cuid())
+  post_id    String
+  post       Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  author_id  String
+  author     User     @relation(fields: [author_id], references: [id])
+  content    String   @db.Text
+  created_at DateTime @default(now())
+}
+
+model PostLike {
+  post_id    String
+  post       Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  created_at DateTime @default(now())
+
+  @@id([post_id, user_id])
+}
+
+model PostBookmark {
+  post_id    String
+  post       Post     @relation(fields: [post_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  created_at DateTime @default(now())
+
+  @@id([post_id, user_id])
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+}
+
+enum EnumRole {
+  USER
+  OWNER
+  ADMIN
+}
+
+enum EnumUserStatus {
+  ACTIVE
+  WITHDRAWN
 }
