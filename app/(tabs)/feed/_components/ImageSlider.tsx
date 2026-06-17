@@ -39,9 +39,24 @@ export default function ImageSlider({ media }: { media: PostMedia[] }) {
         {media.map((item, i) => (
           <div
             key={item.id}
-            className="snap-center shrink-0 w-full aspect-square bg-stone-100 flex items-center justify-center text-stone-300 text-sm"
+            className="snap-center shrink-0 w-full aspect-square bg-stone-100 overflow-hidden"
           >
-            이미지 {i + 1}
+            {item.preview && item.type === "video" ? (
+              <video
+                src={item.preview}
+                className="w-full h-full object-cover"
+                playsInline
+                muted
+                controls
+              />
+            ) : item.preview ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.preview} alt={`이미지 ${i + 1}`} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-stone-300 text-sm">
+                이미지 {i + 1}
+              </div>
+            )}
           </div>
         ))}
       </div>

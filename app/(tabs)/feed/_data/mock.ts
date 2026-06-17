@@ -1,10 +1,15 @@
-export type PostMedia = { id: string };
+export type PostMedia = {
+  id: string;
+  preview?: string;       // blob URL or base64 (local posts)
+  type?: "image" | "video";
+};
 
 export type Post = {
   id: string;
   author: { username: string };
   content: string;
   media: PostMedia[];
+  tags?: string[];
   likeCount: number;
   commentCount: number;
   createdAt: string;

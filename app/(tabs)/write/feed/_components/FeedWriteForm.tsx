@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { feedStore } from "@/lib/feedStore";
 
 /* ─── Types ─────────────────────────────────────── */
 
@@ -58,7 +59,7 @@ const VideoIcon = () => (
 
 /* ─── FeedWriteForm ──────────────────────────────── */
 
-export default function FeedWriteForm() {
+export default function FeedWriteForm({ username }: { username: string }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const carouselRef = useRef<HTMLDivElement>(null);
@@ -135,8 +136,23 @@ export default function FeedWriteForm() {
   const handleUpload = async () => {
     setShowConfirm(false);
     setUploading(true);
-    // TODO: 실제 서버 업로드
-    await new Promise((res) => setTimeout(res, 2000));
+
+    feedStore.add({
+      id: `local-${Date.now()}`,
+      author: { username },
+      content,
+      media: media.map((m, i) => ({
+        id: `${Date.now()}-${i}`,
+        preview: m.preview,
+        type: m.type,
+      })),
+      tags,
+      likeCount: 0,
+      commentCount: 0,
+      createdAt: "방금 전",
+    });
+
+    await new Promise((res) => setTimeout(res, 1500));
     router.push("/feed");
   };
 

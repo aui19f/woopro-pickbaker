@@ -128,6 +128,15 @@ export default function PostCard({ post, isLoggedIn }: { post: Post; isLoggedIn:
         )}
       </div>
 
+      {/* 태그 */}
+      {post.tags && post.tags.length > 0 && (
+        <div className="px-4 pb-1 flex flex-wrap gap-x-2 gap-y-0.5">
+          {post.tags.map((tag) => (
+            <span key={tag} className="text-xs text-point font-medium">#{tag}</span>
+          ))}
+        </div>
+      )}
+
       {/* 댓글 보기 */}
       {post.commentCount > 0 && (
         <button

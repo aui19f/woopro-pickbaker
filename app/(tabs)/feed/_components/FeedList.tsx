@@ -1,6 +1,8 @@
 "use client";
 
-import { MOCK_POSTS } from "../_data/mock";
+import { useEffect, useState } from "react";
+import { MOCK_POSTS, type Post } from "../_data/mock";
+import { feedStore } from "@/lib/feedStore";
 import PostCard from "./PostCard";
 
 interface Props {
@@ -8,9 +10,16 @@ interface Props {
 }
 
 export default function FeedList({ isLoggedIn }: Props) {
+  const [posts, setPosts] = useState<Post[]>(MOCK_POSTS);
+
+  useEffect(() => {
+    const local = feedStore.getAll();
+    if (local.length > 0) setPosts([...local, ...MOCK_POSTS]);
+  }, []);
+
   return (
     <div className="bg-white">
-      {MOCK_POSTS.map((post) => (
+      {posts.map((post) => (
         <PostCard key={post.id} post={post} isLoggedIn={isLoggedIn} />
       ))}
     </div>
