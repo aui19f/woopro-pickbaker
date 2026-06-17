@@ -12,3 +12,8 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   background-color: var(--color-base);
 }
+
+/* iOS Safari auto-zoom prevention: triggered when font-size < 16px */
+input, textarea, select {
+  font-size: max(16px, 1em);
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createPost } from "../_actions";
 
@@ -8,24 +8,22 @@ import { createPost } from "../_actions";
 
 interface MediaItem {
   id: string;
+  file: File;
   preview: string;
-  type: "image" | "video";
+  type: "image";
 }
 
-/* ─── Validation ─────────────────────────────────── */
-
+/* ─── Commented out: video support ──────────────────────────────────
 function validateVideoDuration(file: File): Promise<boolean> {
   return new Promise((resolve) => {
     const video = document.createElement("video");
     video.preload = "metadata";
-    video.onloadedmetadata = () => {
-      URL.revokeObjectURL(video.src);
-      resolve(video.duration <= 180);
-    };
+    video.onloadedmetadata = () => { URL.revokeObjectURL(video.src); resolve(video.duration <= 180); };
     video.onerror = () => resolve(false);
     video.src = URL.createObjectURL(file);
   });
 }
+─────────────────────────────────────────────────────────────────── */
 
 /* ─── Icons ─────────────────────────────────────── */
 
@@ -51,53 +49,209 @@ const XSmIcon = () => (
   </svg>
 );
 
+/* ─── Commented out: VideoIcon ──────────────────────────────────
 const VideoIcon = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
     <path d="M8 5v14l11-7z" />
   </svg>
 );
+─────────────────────────────────────────────────────────────────── */
+
+/* ─── ImageEditor ────────────────────────────────────────────────── */
+// Pan: single-finger drag (only when zoomed in; scale=1 lets the carousel scroll).
+// Zoom: two-finger pinch or mouse wheel.
+// The image always covers the 1:1 frame — translate is clamped to W*(s-1)/2.
+//
+// CSS: translate(x, y) scale(s) with transform-origin: center.
+// Center of element moves by exactly (x, y) in screen space.
+// Overflow edges: left = W/2*(1-s)+x ≤ 0  →  x ≤ W*(s-1)/2.
+
+function ImageEditor({ src }: { src: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Mutable transform — written synchronously in event handlers, read at render.
+  const tRef = useRef({ scale: 1, x: 0, y: 0 });
+  const [, forceRender] = useState(0);
+
+  const drag = useRef<{
+    startX: number; startY: number;
+    originX: number; originY: number;
+  } | null>(null);
+
+  const pinch = useRef<{ dist: number; startScale: number } | null>(null);
+
+  // Clamp x/y so image always covers the container.
+  function clampXY(x: number, y: number, s: number) {
+    const el = containerRef.current;
+    if (!el) return { x, y };
+    const hw = (el.clientWidth  * (s - 1)) / 2;
+    const hh = (el.clientHeight * (s - 1)) / 2;
+    return {
+      x: Math.max(-hw, Math.min(hw, x)),
+      y: Math.max(-hh, Math.min(hh, y)),
+    };
+  }
+
+  function commit(next: Partial<typeof tRef.current>) {
+    Object.assign(tRef.current, next);
+    forceRender((n) => n + 1);
+  }
+
+  // Touch + wheel — must be imperative to call preventDefault() on non-passive listeners.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    function dist(e: TouchEvent) {
+      return Math.hypot(
+        e.touches[1].clientX - e.touches[0].clientX,
+        e.touches[1].clientY - e.touches[0].clientY,
+      );
+    }
+
+    function onTouchStart(e: TouchEvent) {
+      const t = tRef.current;
+      if (e.touches.length === 1) {
+        // Only capture drag when zoomed; otherwise let parent carousel scroll.
+        if (t.scale > 1.01) {
+          drag.current = {
+            startX: e.touches[0].clientX,
+            startY: e.touches[0].clientY,
+            originX: t.x,
+            originY: t.y,
+          };
+        }
+        pinch.current = null;
+      } else if (e.touches.length === 2) {
+        drag.current = null;
+        pinch.current = { dist: dist(e), startScale: t.scale };
+      }
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      const el = containerRef.current;
+      if (!el) return;
+      const t = tRef.current;
+
+      if (e.touches.length === 1 && drag.current) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - drag.current.startX;
+        const dy = e.touches[0].clientY - drag.current.startY;
+        const clamped = clampXY(drag.current.originX + dx, drag.current.originY + dy, t.scale);
+        commit(clamped);
+      } else if (e.touches.length === 2 && pinch.current) {
+        e.preventDefault();
+        const newScale = Math.max(1, Math.min(3, pinch.current.startScale * (dist(e) / pinch.current.dist)));
+        const clamped = clampXY(t.x, t.y, newScale);
+        commit({ scale: newScale, ...clamped });
+      }
+    }
+
+    function onTouchEnd() {
+      drag.current = null;
+      pinch.current = null;
+    }
+
+    function onWheel(e: WheelEvent) {
+      e.preventDefault();
+      const t = tRef.current;
+      const newScale = Math.max(1, Math.min(3, t.scale + (e.deltaY > 0 ? -0.12 : 0.12)));
+      const clamped = clampXY(t.x, t.y, newScale);
+      commit({ scale: newScale, ...clamped });
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: false });
+    el.addEventListener("touchmove",  onTouchMove,  { passive: false });
+    el.addEventListener("touchend",   onTouchEnd);
+    el.addEventListener("wheel",      onWheel, { passive: false });
+
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove",  onTouchMove);
+      el.removeEventListener("touchend",   onTouchEnd);
+      el.removeEventListener("wheel",      onWheel);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Mouse drag (desktop)
+  function onMouseDown(e: React.MouseEvent) {
+    e.preventDefault();
+    const t = tRef.current;
+    drag.current = { startX: e.clientX, startY: e.clientY, originX: t.x, originY: t.y };
+  }
+
+  function onMouseMove(e: React.MouseEvent) {
+    if (!drag.current) return;
+    const t = tRef.current;
+    const clamped = clampXY(
+      drag.current.originX + e.clientX - drag.current.startX,
+      drag.current.originY + e.clientY - drag.current.startY,
+      t.scale,
+    );
+    commit(clamped);
+  }
+
+  function onMouseUp() {
+    drag.current = null;
+  }
+
+  const { scale, x, y } = tRef.current;
+
+  return (
+    <div
+      ref={containerRef}
+      className="w-full h-full overflow-hidden select-none cursor-grab active:cursor-grabbing"
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        draggable={false}
+        className="w-full h-full object-cover pointer-events-none"
+        style={{
+          transform: `translate(${x}px, ${y}px) scale(${scale})`,
+          transformOrigin: "center center",
+          willChange: "transform",
+        }}
+      />
+    </div>
+  );
+}
 
 /* ─── FeedWriteForm ──────────────────────────────── */
 
 export default function FeedWriteForm() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const carouselRef = useRef<HTMLDivElement>(null);
+  const carouselRef  = useRef<HTMLDivElement>(null);
 
-  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [media, setMedia]           = useState<MediaItem[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [content, setContent] = useState("");
-  const [tagInput, setTagInput] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [content, setContent]       = useState("");
+  const [tagInput, setTagInput]     = useState("");
+  const [tags, setTags]             = useState<string[]>([]);
+  const [error, setError]           = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [uploading, setUploading]   = useState(false);
 
-  /* 미디어 추가 */
-  const handleFilesChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
+  /* 미디어 추가 — 이미지만 */
+  const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []).filter((f) =>
+      f.type.startsWith("image/"),
+    );
     e.target.value = "";
 
     const remaining = 10 - media.length;
-    const toAdd = files.slice(0, remaining);
-
-    const newItems: MediaItem[] = [];
-    for (const file of toAdd) {
-      const isVideo = file.type.startsWith("video/");
-      if (isVideo) {
-        const valid = await validateVideoDuration(file);
-        if (!valid) {
-          setError("영상은 최대 3분까지 업로드할 수 있습니다.");
-          setTimeout(() => setError(null), 3000);
-          continue;
-        }
-      }
-      newItems.push({
-        id: `${Date.now()}-${Math.random()}`,
-        preview: URL.createObjectURL(file),
-        type: isVideo ? "video" : "image",
-      });
-    }
+    const newItems: MediaItem[] = files.slice(0, remaining).map((file) => ({
+      id: `${Date.now()}-${Math.random()}`,
+      file,
+      preview: URL.createObjectURL(file),
+      type: "image",
+    }));
 
     setMedia((prev) => [...prev, ...newItems]);
   };
@@ -110,7 +264,7 @@ export default function FeedWriteForm() {
     });
   };
 
-  /* 캐러셀 스크롤 감지 */
+  /* 캐러셀 스크롤 */
   const handleCarouselScroll = () => {
     const el = carouselRef.current;
     if (!el) return;
@@ -122,9 +276,7 @@ export default function FeedWriteForm() {
     if ((e.key === "Enter" || e.key === " ") && tagInput.trim()) {
       e.preventDefault();
       const tag = tagInput.trim().replace(/^#+/, "");
-      if (tag && !tags.includes(tag) && tags.length < 20) {
-        setTags((prev) => [...prev, tag]);
-      }
+      if (tag && !tags.includes(tag) && tags.length < 20) setTags((prev) => [...prev, tag]);
       setTagInput("");
     }
     if (e.key === "Backspace" && !tagInput && tags.length > 0) {
@@ -138,42 +290,33 @@ export default function FeedWriteForm() {
     setUploading(true);
 
     try {
-      // 1. 파일 이름 목록으로 presigned URL 요청
+      // 1. Presigned URL 발급
       const presignRes = await fetch("/api/presigned-upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          files: media.map((m, i) => ({
-            name: `file-${i}.${m.type === "video" ? "mp4" : "jpg"}`,
-          })),
+          files: media.map((_, i) => ({ name: `file-${i}.jpg` })),
         }),
       });
       if (!presignRes.ok) throw new Error("presigned URL 요청 실패");
       const { results } = await presignRes.json();
 
-      // 2. 각 파일을 Supabase Storage에 직접 업로드
-      const mediaUrls: { url: string; type: "IMAGE" | "VIDEO"; order: number }[] = [];
+      // 2. Supabase Storage에 직접 업로드
+      const mediaUrls: { url: string; type: "IMAGE"; order: number }[] = [];
       for (const [i, item] of media.entries()) {
         const blob = await fetch(item.preview).then((r) => r.blob());
         const { signedUrl, publicUrl } = results[i];
-
         const uploadRes = await fetch(signedUrl, {
           method: "PUT",
           body: blob,
           headers: { "Content-Type": blob.type },
         });
         if (!uploadRes.ok) throw new Error(`파일 ${i + 1} 업로드 실패`);
-
-        mediaUrls.push({
-          url: publicUrl,
-          type: item.type === "video" ? "VIDEO" : "IMAGE",
-          order: i,
-        });
+        mediaUrls.push({ url: publicUrl, type: "IMAGE", order: i });
       }
 
-      // 3. DB에 포스트 생성
+      // 3. DB 포스트 생성
       await createPost({ content, tags, media: mediaUrls });
-
       router.push("/feed");
     } catch (err) {
       setUploading(false);
@@ -182,9 +325,8 @@ export default function FeedWriteForm() {
     }
   };
 
-  /* 슬라이드 총 개수 (미디어 + "추가" 슬라이드) */
-  const hasAddSlide = media.length < 10;
-  const totalSlides = media.length + (hasAddSlide ? 1 : 0);
+  const hasAddSlide   = media.length < 10;
+  const totalSlides   = media.length + (hasAddSlide ? 1 : 0);
   const isOnMediaSlide = currentIdx < media.length;
 
   return (
@@ -205,28 +347,26 @@ export default function FeedWriteForm() {
 
       <div className="max-w-lg mx-auto px-4 py-4 space-y-3.5">
 
-        {/* ── 미디어 업로드 ── */}
+        {/* ── 미디어 업로드 (이미지만) ── */}
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*,video/*"
+          accept="image/*"
           multiple
           className="hidden"
           onChange={handleFilesChange}
         />
 
         {media.length === 0 ? (
-          /* 빈 상태 */
           <button
             onClick={() => fileInputRef.current?.click()}
             className="w-full aspect-square rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50 flex flex-col items-center justify-center gap-3 text-stone-300 active:bg-stone-100 transition-colors"
           >
             <UploadMediaIcon />
-            <span className="text-sm font-medium">이미지 / 영상 추가</span>
-            <span className="text-xs">최대 10개 · 영상 최대 3분</span>
+            <span className="text-sm font-medium">이미지 추가</span>
+            <span className="text-xs">최대 10장</span>
           </button>
         ) : (
-          /* 캐러셀 */
           <div className="relative rounded-2xl overflow-hidden bg-stone-900">
             {/* 슬라이드 */}
             <div
@@ -237,35 +377,20 @@ export default function FeedWriteForm() {
             >
               {media.map((item) => (
                 <div key={item.id} className="snap-start shrink-0 w-full aspect-square relative">
-                  {item.type === "image" ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.preview} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <video
-                      src={item.preview}
-                      className="w-full h-full object-cover"
-                      playsInline
-                      muted
-                    />
-                  )}
-                  {/* 삭제 */}
+                  {/* ImageEditor: pan + zoom per image */}
+                  <ImageEditor src={item.preview} />
+
+                  {/* 삭제 버튼 (ImageEditor 위에 오버레이) */}
                   <button
                     onClick={() => removeMedia(item.id)}
-                    className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white"
+                    className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white z-10"
                   >
                     <XSmIcon />
                   </button>
-                  {/* 동영상 뱃지 */}
-                  {item.type === "video" && (
-                    <div className="absolute bottom-10 left-3 flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/50 text-white text-[10px] font-medium">
-                      <VideoIcon />
-                      동영상
-                    </div>
-                  )}
                 </div>
               ))}
 
-              {/* 추가 슬라이드 */}
+              {/* 이미지 추가 슬라이드 */}
               {hasAddSlide && (
                 <div className="snap-start shrink-0 w-full aspect-square bg-stone-800 flex flex-col items-center justify-center gap-2">
                   <button
@@ -279,22 +404,20 @@ export default function FeedWriteForm() {
               )}
             </div>
 
-            {/* 카운터 (미디어 슬라이드에서만) */}
+            {/* 카운터 */}
             {isOnMediaSlide && (
-              <div className="absolute top-3 left-3 px-2.5 py-0.5 rounded-full bg-black/40 text-white text-xs font-semibold tabular-nums">
+              <div className="absolute top-3 left-3 px-2.5 py-0.5 rounded-full bg-black/40 text-white text-xs font-semibold tabular-nums pointer-events-none">
                 {currentIdx + 1} / {media.length}
               </div>
             )}
 
             {/* 점 인디케이터 */}
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-1.5">
+            <div className="absolute bottom-3 left-0 right-0 flex justify-center items-center gap-1.5 pointer-events-none">
               {Array.from({ length: totalSlides }).map((_, idx) => (
                 <div
                   key={idx}
                   className={`rounded-full transition-all duration-200 ${
-                    idx === currentIdx
-                      ? "w-4 h-1.5 bg-white"
-                      : "w-1.5 h-1.5 bg-white/40"
+                    idx === currentIdx ? "w-4 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/40"
                   }`}
                 />
               ))}
@@ -314,20 +437,14 @@ export default function FeedWriteForm() {
           <div className="px-4 pt-4 pb-2">
             <textarea
               value={content}
-              onChange={(e) => {
-                if (e.target.value.length <= 1000) setContent(e.target.value);
-              }}
+              onChange={(e) => { if (e.target.value.length <= 1000) setContent(e.target.value); }}
               placeholder="내용을 작성해주세요 (선택)"
               rows={6}
               className="w-full text-sm text-stone-800 placeholder:text-stone-300 outline-none bg-transparent resize-none"
             />
           </div>
           <div className="px-4 pb-3 flex justify-end">
-            <span
-              className={`text-[11px] tabular-nums ${
-                content.length >= 900 ? "text-red-400" : "text-stone-300"
-              }`}
-            >
+            <span className={`text-[11px] tabular-nums ${content.length >= 900 ? "text-red-400" : "text-stone-300"}`}>
               {content.length} / 1000
             </span>
           </div>
@@ -335,10 +452,7 @@ export default function FeedWriteForm() {
 
         {/* ── 태그 ── */}
         <div className="bg-white rounded-2xl border border-stone-100 shadow-sm px-4 py-3.5">
-          <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wide mb-2.5">
-            태그
-          </p>
-
+          <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wide mb-2.5">태그</p>
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mb-2.5">
               {tags.map((tag) => (
@@ -347,13 +461,11 @@ export default function FeedWriteForm() {
                   onClick={() => setTags((prev) => prev.filter((t) => t !== tag))}
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-stone-100 text-xs font-medium text-stone-600 active:bg-stone-200 transition-colors"
                 >
-                  #{tag}
-                  <XSmIcon />
+                  #{tag} <XSmIcon />
                 </button>
               ))}
             </div>
           )}
-
           <input
             type="text"
             value={tagInput}
@@ -376,18 +488,11 @@ export default function FeedWriteForm() {
       {/* ── 업로드 확인 모달 ── */}
       {showConfirm && (
         <>
-          <div
-            className="fixed inset-0 bg-black/50 z-40"
-            onClick={() => setShowConfirm(false)}
-          />
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setShowConfirm(false)} />
           <div className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl z-50 px-5 pt-6 pb-10 shadow-xl">
             <div className="w-10 h-1 rounded-full bg-stone-200 mx-auto mb-5" />
-            <h3 className="text-base font-bold text-stone-800 mb-1.5">
-              업로드 하시겠습니까?
-            </h3>
-            <p className="text-sm text-stone-400 mb-6">
-              작성한 내용이 피드에 업로드됩니다.
-            </p>
+            <h3 className="text-base font-bold text-stone-800 mb-1.5">업로드 하시겠습니까?</h3>
+            <p className="text-sm text-stone-400 mb-6">작성한 내용이 피드에 업로드됩니다.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowConfirm(false)}
@@ -406,9 +511,9 @@ export default function FeedWriteForm() {
         </>
       )}
 
-      {/* ── 업로드 로딩 화면 ── */}
+      {/* ── 업로드 로딩 ── */}
       {uploading && (
-        <div className="fixed inset-0 bg-white z-[300] flex flex-col items-center justify-center gap-4">
+        <div className="fixed inset-0 bg-white z-300 flex flex-col items-center justify-center gap-4">
           <div className="w-14 h-14 rounded-full border-[3px] border-stone-200 border-t-point animate-spin" />
           <p className="text-sm font-semibold text-stone-500">업로드 중...</p>
           <p className="text-xs text-stone-300">잠시만 기다려주세요</p>
