@@ -44,8 +44,15 @@ export default async function MyPage({ params }: { params: Promise<{ id: string 
           <ChevronRight />
         </Link>
 
-        {/* 나머지 메뉴 (추후 연결) */}
-        {(["북마크", "팔로잉", "알림 설정"] as const).map((item) => (
+        <Link
+          href={`/${id}/saved`}
+          className="w-full flex items-center justify-between px-5 py-4 text-sm text-stone-700"
+        >
+          저장됨
+          <ChevronRight />
+        </Link>
+
+        {(["팔로잉", "알림 설정"] as const).map((item) => (
           <button
             key={item}
             className="w-full flex items-center justify-between px-5 py-4 text-sm text-stone-700"

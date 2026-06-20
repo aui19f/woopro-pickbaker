@@ -1,6 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../generated/prisma"
+  provider      = "prisma-client-js"
+  output        = "../generated/prisma"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -20,11 +21,22 @@ model User {
   created_at DateTime       @default(now())
   updated_at DateTime       @updatedAt
 
-  posts     Post[]
-  comments  PostComment[]
-  likes     PostLike[]
-  bookmarks PostBookmark[]
+  posts            Post[]
+  comments         PostComment[]
+  likes            PostLike[]
+  bookmarks        PostBookmark[]
+  recipes          Recipe[]
+  recipe_likes     RecipeLike[]
+  recipe_bookmarks RecipeBookmark[]
+  recipe_comments      RecipeComment[]
+  equipment            UserEquipment[]
+  offline_events       OfflineEvent[]
+  offline_likes        OfflineEventLike[]
+  offline_bookmarks    OfflineEventBookmark[]
+  offline_joins        OfflineEventJoin[]
 }
+
+// ─── Feed Post ────────────────────────────────────────────────
 
 model Post {
   id         String        @id @default(cuid())
@@ -86,9 +98,117 @@ model PostBookmark {
   @@id([post_id, user_id])
 }
 
+// ─── Recipe ──────────────────────────────────────────────────
+
+model Recipe {
+  id          String             @id @default(cuid())
+  author_id   String
+  author      User               @relation(fields: [author_id], references: [id])
+  title       String
+  category    RecipeCategory
+  servings    Int                @default(1)   // 기준 인원수
+  memo        String?            @db.Text
+  link        String?
+  images      RecipeImage[]
+  ingredients RecipeIngredient[]
+  steps       RecipeStep[]
+  likes       RecipeLike[]
+  bookmarks   RecipeBookmark[]
+  comments    RecipeComment[]
+  created_at  DateTime           @default(now())
+  updated_at  DateTime           @updatedAt
+}
+
+model RecipeImage {
+  id        String @id @default(cuid())
+  recipe_id String
+  recipe    Recipe @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  url       String
+  order     Int    @default(0)   // 0번이 메인 썸네일
+}
+
+model RecipeIngredient {
+  id        String @id @default(cuid())
+  recipe_id String
+  recipe    Recipe @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  name      String
+  amount    String
+  order     Int    @default(0)
+}
+
+model RecipeStep {
+  id        String  @id @default(cuid())
+  recipe_id String
+  recipe    Recipe  @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  content   String  @db.Text
+  image_url String?
+  order     Int     @default(0)
+}
+
+model RecipeLike {
+  recipe_id  String
+  recipe     Recipe   @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  created_at DateTime @default(now())
+
+  @@id([recipe_id, user_id])
+}
+
+model RecipeBookmark {
+  recipe_id  String
+  recipe     Recipe   @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User     @relation(fields: [user_id], references: [id])
+  created_at DateTime @default(now())
+
+  @@id([recipe_id, user_id])
+}
+
+model RecipeComment {
+  id         String   @id @default(cuid())
+  recipe_id  String
+  recipe     Recipe   @relation(fields: [recipe_id], references: [id], onDelete: Cascade)
+  author_id  String
+  author     User     @relation(fields: [author_id], references: [id])
+  content    String   @db.Text
+  created_at DateTime @default(now())
+}
+
+// ─── User Equipment ───────────────────────────────────────────
+
+model UserEquipment {
+  id      String        @id @default(cuid())
+  user_id String
+  user    User          @relation(fields: [user_id], references: [id])
+  type    EquipmentType
+  name    String
+}
+
+// ─── Enums ───────────────────────────────────────────────────
+
 enum MediaType {
   IMAGE
   VIDEO
+}
+
+enum RecipeCategory {
+  BREAD        // 빵
+  CAKE         // 케이크
+  COOKIE       // 쿠키·구움과자
+  PASTRY       // 페이스트리
+  TART         // 타르트
+  DONUT        // 도넛
+  MUFFIN_SCONE // 머핀·스콘
+  ETC          // 기타
+}
+
+enum EquipmentType {
+  OVEN
+  MIXER
+  HAND_MIXER
+  PROOFER
+  OTHER
 }
 
 enum EnumRole {
@@ -100,4 +220,69 @@ enum EnumRole {
 enum EnumUserStatus {
   ACTIVE
   WITHDRAWN
+}
+
+// ─── Offline Event ────────────────────────────────────────────
+
+model OfflineEvent {
+  id             String   @id @default(cuid())
+  author_id      String
+  author         User     @relation(fields: [author_id], references: [id])
+  title          String
+  category       String
+  start_date     String
+  end_date       String
+  same_time      Boolean  @default(true)
+  start_time     String   @default("")
+  end_time       String   @default("")
+  daily_times    Json?
+  location       String   @default("")
+  admission      Int?
+  poster_url     String?
+  memo           String?  @db.Text
+  link_instagram String?
+  link_twitter   String?
+  link_website   String?
+  status         String   @default("active")
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  likes          OfflineEventLike[]
+  bookmarks      OfflineEventBookmark[]
+  joins          OfflineEventJoin[]
+
+  @@map("offline_events")
+}
+
+model OfflineEventLike {
+  event_id   String
+  event      OfflineEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User         @relation(fields: [user_id], references: [id])
+  created_at DateTime     @default(now())
+
+  @@id([event_id, user_id])
+  @@map("offline_event_likes")
+}
+
+model OfflineEventBookmark {
+  event_id   String
+  event      OfflineEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User         @relation(fields: [user_id], references: [id])
+  created_at DateTime     @default(now())
+
+  @@id([event_id, user_id])
+  @@map("offline_event_bookmarks")
+}
+
+model OfflineEventJoin {
+  event_id   String
+  event      OfflineEvent @relation(fields: [event_id], references: [id], onDelete: Cascade)
+  user_id    String
+  user       User         @relation(fields: [user_id], references: [id])
+  created_at DateTime     @default(now())
+
+  @@id([event_id, user_id])
+  @@map("offline_event_joins")
 }

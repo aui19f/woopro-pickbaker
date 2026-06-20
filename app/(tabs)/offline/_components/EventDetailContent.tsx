@@ -1,7 +1,34 @@
 "use client";
 
 import { useState } from "react";
-import { type OfflineEvent, formatDate, getEventStatus, MOCK_OFFLINE_COMMENTS, type OfflineComment } from "../_data/mock";
+import { formatDate, getEventStatus } from "../_data/mock";
+import { toggleOfflineLike, toggleOfflineBookmark, toggleOfflineJoin } from "../_actions";
+import LoginRequiredModal from "@/app/_components/LoginRequiredModal";
+
+/* ─── Types ──────────────────────────────────── */
+
+export type OfflineEventDetail = {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  posterUrl: string | null;
+  memo: string | null;
+  linkInstagram: string | null;
+  linkTwitter: string | null;
+  linkWebsite: string | null;
+  createdAt: string;
+  updatedAt: string;
+  likeCount: number;
+  bookmarkCount: number;
+  joinCount: number;
+  isLiked: boolean;
+  isBookmarked: boolean;
+  isJoined: boolean;
+};
 
 /* ─── Icons ──────────────────────────────────── */
 
@@ -39,16 +66,9 @@ const InstagramIcon = () => (
   </svg>
 );
 
-const FacebookIcon = () => (
+const TwitterXIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-  </svg>
-);
-
-const EditIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
   </svg>
 );
 
@@ -73,7 +93,7 @@ const BookmarkIcon = ({ filled }: { filled: boolean }) => (
 
 /* ─── SocialLink ─────────────────────────────── */
 
-function SocialLink({ href, type, label }: { href: string; type: "website" | "instagram" | "facebook"; label: string }) {
+function SocialLink({ href, type, label }: { href: string; type: "website" | "instagram" | "twitter"; label: string }) {
   return (
     <a
       href={href}
@@ -82,103 +102,80 @@ function SocialLink({ href, type, label }: { href: string; type: "website" | "in
       className="flex items-center gap-2 px-4 py-3 rounded-xl bg-stone-50 border border-stone-100 text-stone-600 text-sm hover:bg-stone-100 transition-colors"
     >
       <span className="text-stone-500">
-        {type === "website" && <GlobeIcon />}
+        {type === "website"   && <GlobeIcon />}
         {type === "instagram" && <InstagramIcon />}
-        {type === "facebook" && <FacebookIcon />}
+        {type === "twitter"   && <TwitterXIcon />}
       </span>
       {label}
     </a>
   );
 }
 
-/* ─── CommentItem ────────────────────────────── */
-
-function CommentItem({ comment }: { comment: OfflineComment }) {
-  return (
-    <div className="flex gap-2.5">
-      <div className="w-8 h-8 rounded-full bg-stone-200 shrink-0 flex items-center justify-center text-xs font-bold text-stone-500">
-        {comment.username.charAt(0).toUpperCase()}
-      </div>
-      <div className="flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-stone-800">{comment.username}</span>
-          <span className="text-[10px] text-stone-400">{comment.time}</span>
-        </div>
-        <p className="text-sm text-stone-700 mt-0.5">{comment.content}</p>
-      </div>
-    </div>
-  );
-}
-
 /* ─── EventDetailContent ─────────────────────── */
 
 interface Props {
-  event: OfflineEvent;
-  isAdmin: boolean;
-  onEditClick?: () => void;
+  event: OfflineEventDetail;
+  isLoggedIn: boolean;
 }
 
-export default function EventDetailContent({ event, isAdmin, onEditClick }: Props) {
+export default function EventDetailContent({ event, isLoggedIn }: Props) {
   const status = getEventStatus(event.startDate, event.endDate);
 
-  const [liked, setLiked] = useState(false);
-  const [likeCount, setLikeCount] = useState(event.likeCount);
-  const [joined, setJoined] = useState(false);
-  const [joinCount, setJoinCount] = useState(event.joinCount);
-  const [bookmarked, setBookmarked] = useState(false);
+  const [liked, setLiked]               = useState(event.isLiked);
+  const [likeCount, setLikeCount]       = useState(event.likeCount);
+  const [joined, setJoined]             = useState(event.isJoined);
+  const [joinCount, setJoinCount]       = useState(event.joinCount);
+  const [bookmarked, setBookmarked]     = useState(event.isBookmarked);
   const [bookmarkCount, setBookmarkCount] = useState(event.bookmarkCount);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
-  const [comments, setComments] = useState<OfflineComment[]>(MOCK_OFFLINE_COMMENTS[event.id] ?? []);
-  const [commentText, setCommentText] = useState("");
+  const guard = (action: () => void) => {
+    if (!isLoggedIn) { setShowLoginModal(true); return; }
+    action();
+  };
 
-  const handleLike = () => {
+  const handleLike = () => guard(() => {
     setLiked((v) => !v);
     setLikeCount((c) => (liked ? c - 1 : c + 1));
-  };
-  const handleJoin = () => {
+    toggleOfflineLike(event.id);
+  });
+  const handleJoin = () => guard(() => {
     setJoined((v) => !v);
     setJoinCount((c) => (joined ? c - 1 : c + 1));
-  };
-  const handleBookmark = () => {
+    toggleOfflineJoin(event.id);
+  });
+  const handleBookmark = () => guard(() => {
     setBookmarked((v) => !v);
     setBookmarkCount((c) => (bookmarked ? c - 1 : c + 1));
-  };
-
-  const submitComment = () => {
-    if (!commentText.trim()) return;
-    setComments((prev) => [
-      { id: `new-${Date.now()}`, username: "나", content: commentText.trim(), time: "방금 전" },
-      ...prev,
-    ]);
-    setCommentText("");
-  };
+    toggleOfflineBookmark(event.id);
+  });
 
   const statusStyles = { ongoing: "bg-emerald-50 text-emerald-600", upcoming: "bg-blue-50 text-blue-600", past: "bg-stone-100 text-stone-400" };
   const statusLabels = { ongoing: "행사중", upcoming: "행사전", past: "행사완료" };
 
   return (
     <div className="px-4 pb-10">
-      {/* 포스터 — 3:4 세로 비율 */}
-      <div className="aspect-3/4 bg-stone-100 rounded-2xl flex items-center justify-center text-stone-300 text-sm mb-4 relative overflow-hidden">
-        포스터
+      {/* 포스터 */}
+      <div className="aspect-3/4 bg-stone-100 rounded-2xl mb-4 relative overflow-hidden flex items-center justify-center text-stone-300 text-sm">
+        {event.posterUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={event.posterUrl} alt={event.title} className="w-full h-full object-cover" />
+        ) : (
+          "포스터"
+        )}
       </div>
 
-      {/* 제목 + 상태 + 수정 */}
+      {/* 제목 + 상태 */}
       <div className="flex items-start justify-between gap-2 mb-4">
         <div className="flex-1">
           <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2 ${statusStyles[status]}`}>
             {statusLabels[status]}
           </span>
           <h1 className="text-lg font-bold text-stone-800 leading-snug">{event.title}</h1>
+          {event.updatedAt !== event.createdAt && (
+            <p className="text-xs text-stone-400 mt-1">수정됨 · {event.updatedAt}</p>
+          )}
         </div>
-        {isAdmin && (
-          <button
-            onClick={onEditClick}
-            className="shrink-0 w-9 h-9 rounded-xl bg-stone-100 flex items-center justify-center text-stone-500 hover:bg-stone-200 transition-colors mt-1"
-          >
-            <EditIcon />
-          </button>
-        )}
       </div>
 
       {/* 상세 정보 */}
@@ -190,27 +187,39 @@ export default function EventDetailContent({ event, isAdmin, onEditClick }: Prop
             <p className="text-stone-400 text-xs mt-0.5">~ {formatDate(event.endDate)}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 px-4 py-3.5">
-          <ClockIcon />
-          <p className="text-sm text-stone-700">{event.startTime} ~ {event.endTime}</p>
-        </div>
-        <button
-          onClick={() => alert("지도 서비스 준비 중입니다.")}
-          className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
-        >
-          <MapPinIcon />
-          <p className="text-sm text-stone-700 underline underline-offset-2">{event.location}</p>
-        </button>
+        {(event.startTime || event.endTime) && (
+          <div className="flex items-center gap-3 px-4 py-3.5">
+            <ClockIcon />
+            <p className="text-sm text-stone-700">{event.startTime} ~ {event.endTime}</p>
+          </div>
+        )}
+        {event.location && (
+          <button
+            onClick={() => alert("지도 서비스 준비 중입니다.")}
+            className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+          >
+            <MapPinIcon />
+            <p className="text-sm text-stone-700 underline underline-offset-2">{event.location}</p>
+          </button>
+        )}
       </div>
 
+      {/* 메모 */}
+      {event.memo && (
+        <div className="bg-white rounded-2xl border border-stone-100 shadow-sm mb-4 px-4 py-3.5">
+          <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-2">메모</p>
+          <p className="text-sm text-stone-700 whitespace-pre-wrap">{event.memo}</p>
+        </div>
+      )}
+
       {/* 관련 링크 */}
-      {(event.links.website || event.links.instagram || event.links.facebook) && (
+      {(event.linkWebsite || event.linkInstagram || event.linkTwitter) && (
         <div className="mb-5">
           <p className="text-xs font-semibold text-stone-400 uppercase tracking-wide mb-2 px-1">관련 링크</p>
           <div className="flex flex-col gap-2">
-            {event.links.website && <SocialLink href={event.links.website} type="website" label="공식 웹사이트" />}
-            {event.links.instagram && <SocialLink href={event.links.instagram} type="instagram" label="인스타그램" />}
-            {event.links.facebook && <SocialLink href={event.links.facebook} type="facebook" label="페이스북" />}
+            {event.linkWebsite   && <SocialLink href={event.linkWebsite}   type="website"   label="공식 웹사이트" />}
+            {event.linkInstagram && <SocialLink href={event.linkInstagram} type="instagram" label="인스타그램" />}
+            {event.linkTwitter   && <SocialLink href={event.linkTwitter}   type="twitter"   label="트위터 (X)" />}
           </div>
         </div>
       )}
@@ -246,39 +255,7 @@ export default function EventDetailContent({ event, isAdmin, onEditClick }: Prop
         </button>
       </div>
 
-      {/* 댓글 */}
-      <div className="mt-6">
-        <p className="text-sm font-bold text-stone-800 mb-4">댓글 {comments.length}개</p>
-
-        {/* 댓글 목록 */}
-        <div className="space-y-4 mb-5">
-          {comments.length === 0 ? (
-            <p className="text-sm text-stone-400 text-center py-4">첫 번째 댓글을 남겨보세요.</p>
-          ) : (
-            comments.map((c) => <CommentItem key={c.id} comment={c} />)
-          )}
-        </div>
-
-        {/* 댓글 입력 */}
-        <div className="flex gap-2 items-end">
-          <div className="flex-1 bg-stone-50 rounded-xl px-3 py-2.5 border border-stone-100">
-            <textarea
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              placeholder="댓글을 입력하세요..."
-              rows={1}
-              className="w-full text-sm text-stone-700 placeholder:text-stone-300 bg-transparent outline-none resize-none"
-            />
-          </div>
-          <button
-            onClick={submitComment}
-            disabled={!commentText.trim()}
-            className="h-10 px-4 rounded-xl bg-point text-white text-sm font-semibold disabled:opacity-40 shrink-0"
-          >
-            게시
-          </button>
-        </div>
-      </div>
+      {showLoginModal && <LoginRequiredModal onClose={() => setShowLoginModal(false)} />}
     </div>
   );
 }

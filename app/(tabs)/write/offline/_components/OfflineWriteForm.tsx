@@ -2,6 +2,8 @@
 
 import { useState, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { createOfflineEvent } from "../_actions";
+import { updateOfflineEvent } from "../../../offline/_actions";
 
 /* ─── Types ─────────────────────────────────────── */
 
@@ -24,7 +26,7 @@ const LINK_OPTIONS: { type: LinkType; label: string }[] = [
 
 const DAY_KO = ["일", "월", "화", "수", "목", "금", "토"];
 
-/* ─── Date helpers ───────────────────────────────── */
+/* ─── Helpers ────────────────────────────────────── */
 
 function getDatesInRange(start: string, end: string): string[] {
   if (!start || !end || start > end) return [];
@@ -41,6 +43,26 @@ function getDatesInRange(start: string, end: string): string[] {
 function dayLabel(dateStr: string): string {
   const d = new Date(dateStr + "T00:00:00");
   return `${d.getDate()}일/${DAY_KO[d.getDay()]}`;
+}
+
+function nextDay(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().split("T")[0];
+}
+
+function addHoursToTime(time: string, hours: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = h * 60 + m + hours * 60;
+  const hh = Math.min(23, Math.floor(total / 60));
+  const mm = total % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+function formatAdmission(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  return parseInt(digits, 10).toLocaleString("ko-KR");
 }
 
 /* ─── Icons ─────────────────────────────────────── */
@@ -124,6 +146,31 @@ function CardRow({ children, className = "" }: { children: React.ReactNode; clas
   );
 }
 
+const HOURS   = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTES = ["00", "10", "20", "30", "40", "50"];
+
+function TimePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [hh, mm] = value ? value.split(":") : ["", ""];
+  const selectCls = "bg-stone-50 border border-stone-100 rounded-xl px-2 py-2 text-xs text-stone-700 outline-none appearance-none text-center";
+
+  const setHour = (h: string) => onChange(h ? `${h}:${mm || "00"}` : "");
+  const setMin  = (m: string) => onChange(hh ? `${hh}:${m}` : "");
+
+  return (
+    <div className="flex items-center gap-1">
+      <select value={hh} onChange={(e) => setHour(e.target.value)} className={selectCls} style={{ width: 52 }}>
+        <option value="">--</option>
+        {HOURS.map((h) => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <span className="text-stone-400 text-xs">:</span>
+      <select value={mm} onChange={(e) => setMin(e.target.value)} className={selectCls} style={{ width: 52 }}>
+        <option value="">--</option>
+        {MINUTES.map((m) => <option key={m} value={m}>{m}</option>)}
+      </select>
+    </div>
+  );
+}
+
 function TimeRow({
   label,
   open,
@@ -144,73 +191,123 @@ function TimeRow({
           {label}
         </span>
       )}
-      <input
-        type="time"
-        value={open}
-        onChange={(e) => onOpen(e.target.value)}
-        className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-stone-50 rounded-xl px-2.5 py-2 border border-stone-100"
-      />
+      <TimePicker value={open} onChange={onOpen} />
       <span className="text-stone-300 text-xs shrink-0">~</span>
-      <input
-        type="time"
-        value={close}
-        onChange={(e) => onClose(e.target.value)}
-        className="flex-1 min-w-0 text-xs text-stone-700 outline-none bg-stone-50 rounded-xl px-2.5 py-2 border border-stone-100"
-      />
+      <TimePicker value={close} onChange={onClose} />
     </div>
   );
 }
 
+/* ─── OfflineEditData ───────────────────────────── */
+
+export type OfflineEditData = {
+  id: string;
+  title: string;
+  category: string;
+  startDate: string;
+  endDate: string;
+  sameTime: boolean;
+  startTime: string;
+  endTime: string;
+  dailyTimes: Record<string, { open: string; close: string }>;
+  location: string;
+  admission: string;
+  memo: string;
+  posterUrl: string | null;
+  linkInstagram: string;
+  linkTwitter: string;
+  linkWebsite: string;
+};
+
+function buildInitialLinks(d: OfflineEditData | null): SiteLink[] {
+  if (!d) return [];
+  const links: SiteLink[] = [];
+  if (d.linkInstagram) links.push({ id: "ig",  type: "instagram", url: d.linkInstagram });
+  if (d.linkTwitter)   links.push({ id: "tw",  type: "twitter",   url: d.linkTwitter });
+  if (d.linkWebsite)   links.push({ id: "web", type: "website",   url: d.linkWebsite });
+  return links;
+}
+
 /* ─── OfflineWriteForm ──────────────────────────── */
 
-export default function OfflineWriteForm() {
+export default function OfflineWriteForm({ initialData = null }: { initialData?: OfflineEditData | null }) {
   const router = useRouter();
+  const isEdit = !!initialData;
   const imageInputRef = useRef<HTMLInputElement>(null);
 
+  const [imageFile, setImageFile]       = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [title, setTitle]       = useState("");
-  const [category, setCategory] = useState<Category | "">("");
+  const [existingPosterUrl, setExistingPosterUrl] = useState<string | null>(initialData?.posterUrl ?? null);
+  const [title, setTitle]       = useState(initialData?.title ?? "");
+  const [category, setCategory] = useState<Category | "">(initialData?.category as Category ?? "");
 
   /* 기간 */
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate]     = useState("");
+  const [startDate, setStartDate] = useState(initialData?.startDate ?? "");
+  const [endDate, setEndDate]     = useState(initialData?.endDate ?? "");
 
   /* 운영시간 */
-  const [sameTime, setSameTime]     = useState(true);
-  const [unifiedOpen, setUnifiedOpen]   = useState("");
-  const [unifiedClose, setUnifiedClose] = useState("");
-  const [dailyTimes, setDailyTimes] = useState<Record<string, { open: string; close: string }>>({});
+  const [sameTime, setSameTime]         = useState(initialData?.sameTime ?? true);
+  const [unifiedOpen, setUnifiedOpen]   = useState(initialData?.startTime ?? "");
+  const [unifiedClose, setUnifiedClose] = useState(initialData?.endTime ?? "");
+  const [dailyTimes, setDailyTimes]     = useState<Record<string, { open: string; close: string }>>(initialData?.dailyTimes ?? {});
 
-  const [location, setLocation]   = useState("");
-  const [admission, setAdmission] = useState("");
-  const [memo, setMemo]           = useState("");
-  const [links, setLinks]         = useState<SiteLink[]>([]);
+  const [location, setLocation]   = useState(initialData?.location ?? "");
+  const [admission, setAdmission] = useState(initialData?.admission ?? "");
+  const [memo, setMemo]           = useState(initialData?.memo ?? "");
+  const [links, setLinks]         = useState<SiteLink[]>(() => buildInitialLinks(initialData));
   const [showLinkPicker, setShowLinkPicker] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  /* 날짜 범위 계산 */
+  /* 날짜 범위 */
   const datesInRange = useMemo(() => getDatesInRange(startDate, endDate), [startDate, endDate]);
 
+  /* ─ 날짜 핸들러: 시작일 설정 시 종료일 다음날로 초기화 ─ */
+  const handleStartDateChange = (v: string) => {
+    setStartDate(v);
+    if (v && (!endDate || endDate <= v)) {
+      setEndDate(nextDay(v));
+    }
+  };
+
+  /* ─ 통합 시작시간 핸들러: 종료시간이 비어있으면 +2h로 초기화 ─ */
+  const handleUnifiedOpenChange = (v: string) => {
+    setUnifiedOpen(v);
+    if (v && !unifiedClose) {
+      setUnifiedClose(addHoursToTime(v, 2));
+    }
+  };
+
+  /* ─ 날짜별 시간 업데이트: open 최초 설정 시 close +2h 초기화 ─ */
   const getDaily = (date: string, field: "open" | "close") =>
     dailyTimes[date]?.[field] ?? "";
 
   const updateDaily = (date: string, field: "open" | "close", value: string) =>
-    setDailyTimes((prev) => ({
-      ...prev,
-      [date]: { open: prev[date]?.open ?? "", close: prev[date]?.close ?? "", [field]: value },
-    }));
+    setDailyTimes((prev) => {
+      const existing = prev[date] ?? { open: "", close: "" };
+      const next = { ...existing, [field]: value };
+      if (field === "open" && value && !existing.close) {
+        next.close = addHoursToTime(value, 2);
+      }
+      return { ...prev, [date]: next };
+    });
 
   /* 이미지 */
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setImageFile(file);
     setImagePreview(URL.createObjectURL(file));
     e.target.value = "";
+  };
+
+  /* 입장료: 숫자만, 자동 콤마 포맷 */
+  const handleAdmissionChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAdmission(formatAdmission(e.target.value));
   };
 
   /* 링크 */
   const addedTypes = new Set(links.map((l) => l.type));
   const availableLinkOptions = LINK_OPTIONS.filter(({ type }) => !addedTypes.has(type));
-
   const addLink = (type: LinkType) => {
     setLinks((prev) => [...prev, { id: Date.now().toString(), type, url: "" }]);
     setShowLinkPicker(false);
@@ -220,9 +317,61 @@ export default function OfflineWriteForm() {
   const removeLink = (id: string) =>
     setLinks((prev) => prev.filter((l) => l.id !== id));
 
-  const handleSubmit = () => {
-    // TODO: server action
-    router.push("/offline");
+  /* 제출 */
+  const handleSubmit = async () => {
+    if (!title.trim() || !category || !startDate || !endDate) return;
+    setSubmitting(true);
+    try {
+      const admissionNum = admission
+        ? parseInt(admission.replace(/[^0-9]/g, ""), 10)
+        : null;
+
+      /* 포스터 이미지 업로드 */
+      let posterUrl: string | null = existingPosterUrl;
+      if (imageFile) {
+        const presignRes = await fetch("/api/presigned-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ files: [{ name: imageFile.name }] }),
+        });
+        if (!presignRes.ok) throw new Error("presigned URL 요청 실패");
+        const { results } = await presignRes.json();
+        const uploadRes = await fetch(results[0].signedUrl, {
+          method: "PUT",
+          body: imageFile,
+          headers: { "Content-Type": imageFile.type },
+        });
+        if (!uploadRes.ok) throw new Error("이미지 업로드 실패");
+        posterUrl = results[0].publicUrl;
+      }
+
+      const payload = {
+        title: title.trim(),
+        category,
+        startDate,
+        endDate,
+        sameTime,
+        startTime:  sameTime ? unifiedOpen  : "",
+        endTime:    sameTime ? unifiedClose : "",
+        dailyTimes: sameTime ? {} : dailyTimes,
+        location,
+        admission:  admissionNum,
+        memo,
+        posterUrl,
+        linkInstagram: links.find((l) => l.type === "instagram")?.url ?? "",
+        linkTwitter:   links.find((l) => l.type === "twitter")?.url ?? "",
+        linkWebsite:   links.find((l) => l.type === "website")?.url ?? "",
+      };
+
+      if (isEdit && initialData) {
+        await updateOfflineEvent(initialData.id, payload);
+      } else {
+        await createOfflineEvent(payload);
+        router.push("/offline");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -232,9 +381,13 @@ export default function OfflineWriteForm() {
         <button onClick={() => router.back()} className="text-sm text-stone-400 font-medium w-10">
           취소
         </button>
-        <p className="flex-1 text-center text-sm font-bold text-stone-800">오프라인 행사 등록</p>
-        <button onClick={handleSubmit} className="text-sm text-point font-bold w-10 text-right">
-          등록
+        <p className="flex-1 text-center text-sm font-bold text-stone-800">{isEdit ? "오프라인 행사 수정" : "오프라인 행사 등록"}</p>
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="text-sm text-point font-bold w-10 text-right disabled:opacity-40"
+        >
+          {isEdit ? "저장" : "등록"}
         </button>
       </div>
 
@@ -244,10 +397,10 @@ export default function OfflineWriteForm() {
         <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
 
         <div className="max-w-[320px] mx-auto">
-          {imagePreview ? (
+          {(imagePreview || existingPosterUrl) ? (
             <div className="relative w-full aspect-3/4 rounded-2xl overflow-hidden bg-stone-100">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={imagePreview} alt="포스터" className="w-full h-full object-cover" />
+              <img src={imagePreview ?? existingPosterUrl!} alt="포스터" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-linear-to-t from-black/30 to-transparent flex items-end justify-center pb-4">
                 <button
                   onClick={() => imageInputRef.current?.click()}
@@ -257,7 +410,7 @@ export default function OfflineWriteForm() {
                 </button>
               </div>
               <button
-                onClick={() => setImagePreview(null)}
+                onClick={() => { setImagePreview(null); setImageFile(null); setExistingPosterUrl(null); }}
                 className="absolute top-3 right-3 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center text-white"
               >
                 <XSmIcon />
@@ -309,25 +462,24 @@ export default function OfflineWriteForm() {
         {/* 기간 + 운영시간 */}
         <Card>
           <CardRow>
-            {/* 날짜 범위 (1회 설정) */}
             <Label>기간</Label>
             <div className="flex items-center gap-1.5 mb-4">
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => handleStartDateChange(e.target.value)}
                 className="flex-1 min-w-0 text-sm text-stone-700 outline-none bg-stone-50 rounded-xl px-3 py-2 border border-stone-100"
               />
               <span className="text-stone-300 text-sm shrink-0">~</span>
               <input
                 type="date"
                 value={endDate}
+                min={startDate || undefined}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="flex-1 min-w-0 text-sm text-stone-700 outline-none bg-stone-50 rounded-xl px-3 py-2 border border-stone-100"
               />
             </div>
 
-            {/* 운영시간 헤더 + 체크박스 */}
             <div className="flex items-center justify-between mb-3">
               <Label>운영시간</Label>
               <button
@@ -345,17 +497,15 @@ export default function OfflineWriteForm() {
               </button>
             </div>
 
-            {/* 공통 시간 */}
             {sameTime && (
               <TimeRow
                 open={unifiedOpen}
                 close={unifiedClose}
-                onOpen={setUnifiedOpen}
+                onOpen={handleUnifiedOpenChange}
                 onClose={setUnifiedClose}
               />
             )}
 
-            {/* 날짜별 시간 */}
             {!sameTime && datesInRange.length > 0 && (
               <div className="space-y-2">
                 {datesInRange.map((date) => (
@@ -371,7 +521,6 @@ export default function OfflineWriteForm() {
               </div>
             )}
 
-            {/* 날짜 미입력 상태 안내 */}
             {!sameTime && datesInRange.length === 0 && (
               <p className="text-xs text-stone-300 text-center py-2">
                 날짜를 먼저 설정해주세요
@@ -384,7 +533,6 @@ export default function OfflineWriteForm() {
         <Card>
           <CardRow>
             <Label>장소</Label>
-            {/* TODO: 지도 API 연동 예정 */}
             <input
               type="text"
               value={location}
@@ -395,13 +543,17 @@ export default function OfflineWriteForm() {
           </CardRow>
           <CardRow>
             <Label>입장료</Label>
-            <input
-              type="text"
-              value={admission}
-              onChange={(e) => setAdmission(e.target.value)}
-              placeholder="무료 또는 금액 입력 (예: ₩5,000)"
-              className="w-full text-sm text-stone-800 placeholder:text-stone-300 outline-none bg-transparent"
-            />
+            <div className="flex items-center gap-1.5">
+              {admission && <span className="text-sm text-stone-500 shrink-0">₩</span>}
+              <input
+                type="text"
+                inputMode="numeric"
+                value={admission}
+                onChange={handleAdmissionChange}
+                placeholder="무료면 비워두세요"
+                className="flex-1 text-sm text-stone-800 placeholder:text-stone-300 outline-none bg-transparent"
+              />
+            </div>
           </CardRow>
         </Card>
 
@@ -423,7 +575,6 @@ export default function OfflineWriteForm() {
         <Card>
           <CardRow>
             <Label>사이트</Label>
-
             {links.length > 0 && (
               <div className="space-y-2 mb-3">
                 {links.map((link) => (
@@ -446,7 +597,6 @@ export default function OfflineWriteForm() {
                 ))}
               </div>
             )}
-
             {availableLinkOptions.length > 0 && (
               <button
                 onClick={() => setShowLinkPicker(true)}
@@ -462,9 +612,10 @@ export default function OfflineWriteForm() {
         {/* 등록 버튼 */}
         <button
           onClick={handleSubmit}
-          className="w-full h-13 rounded-2xl bg-point text-white font-bold text-sm shadow-sm active:opacity-90 transition-opacity"
+          disabled={submitting}
+          className="w-full h-13 rounded-2xl bg-point text-white font-bold text-sm shadow-sm active:opacity-90 transition-opacity disabled:opacity-40"
         >
-          등록하기
+          {submitting ? (isEdit ? "저장 중..." : "등록 중...") : (isEdit ? "저장하기" : "등록하기")}
         </button>
       </div>
 

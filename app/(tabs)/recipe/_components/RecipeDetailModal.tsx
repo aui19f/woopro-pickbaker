@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import RecipeDetailContent from "./RecipeDetailContent";
-import { type Recipe } from "../_data/mock";
+import RecipeDetail, { type RecipeDetailData } from "../[recipeId]/_components/RecipeDetail";
 
 const XIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
@@ -12,11 +11,11 @@ const XIcon = () => (
 );
 
 interface Props {
-  recipe: Recipe;
-  isAdmin: boolean;
+  recipe: RecipeDetailData;
+  isLoggedIn: boolean;
 }
 
-export default function RecipeDetailModal({ recipe, isAdmin }: Props) {
+export default function RecipeDetailModal({ recipe, isLoggedIn }: Props) {
   const router = useRouter();
   const [visible, setVisible] = useState(false);
 
@@ -55,11 +54,7 @@ export default function RecipeDetailModal({ recipe, isAdmin }: Props) {
           <div className="w-9" />
         </div>
 
-        <RecipeDetailContent
-          recipe={recipe}
-          isAdmin={isAdmin}
-          onEditClick={() => router.push(`/write/recipe?id=${recipe.id}`)}
-        />
+        <RecipeDetail recipe={recipe} isLoggedIn={isLoggedIn} />
       </div>
     </>
   );

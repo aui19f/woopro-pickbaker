@@ -2,9 +2,20 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { MOCK_EVENTS, formatDate, getEventStatus, type OfflineEvent, type EventStatus } from "../_data/mock";
+import { formatDate, getEventStatus, type EventStatus } from "../_data/mock";
 import { usePageLoading } from "@/app/_components/LoadingOverlay";
 import LoginRequiredModal from "@/app/_components/LoginRequiredModal";
+
+export type OfflineEventListItem = {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  startTime: string;
+  endTime: string;
+  location: string;
+  posterUrl: string | null;
+};
 
 type StatusFilter = "all" | EventStatus;
 
@@ -86,7 +97,7 @@ function EventCard({
   status,
   isLoggedIn,
 }: {
-  event: OfflineEvent;
+  event: OfflineEventListItem;
   status: EventStatus;
   isLoggedIn: boolean;
 }) {
@@ -117,8 +128,15 @@ function EventCard({
         className="bg-white rounded-2xl border border-stone-100 overflow-hidden shadow-sm cursor-pointer active:scale-[0.99] transition-transform"
       >
         {/* 포스터 — 3:4 세로 비율 */}
-        <div className="aspect-3/4 bg-stone-100 flex items-center justify-center text-stone-300 text-sm relative">
-          포스터
+        <div className="aspect-3/4 bg-stone-100 relative overflow-hidden">
+          {event.posterUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={event.posterUrl} alt={event.title} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-stone-300 text-sm">
+              포스터
+            </div>
+          )}
           <span className={`absolute top-3 left-3 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${badge.className}`}>
             {badge.label}
           </span>
@@ -187,10 +205,11 @@ function EventCard({
 /* ─── OfflineListView ────────────────────────── */
 
 interface Props {
+  events: OfflineEventListItem[];
   isLoggedIn: boolean;
 }
 
-export default function OfflineListView({ isLoggedIn }: Props) {
+export default function OfflineListView({ events, isLoggedIn }: Props) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showFilter, setShowFilter] = useState(false);
@@ -208,7 +227,7 @@ export default function OfflineListView({ isLoggedIn }: Props) {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return MOCK_EVENTS.filter((event) => {
+    return events.filter((event) => {
       const matchSearch =
         !q || event.title.toLowerCase().includes(q) || event.location.toLowerCase().includes(q);
       const status = getEventStatus(event.startDate, event.endDate);

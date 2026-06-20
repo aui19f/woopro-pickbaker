@@ -100,24 +100,21 @@ export default function PostCard({ post, isLoggedIn }: { post: FeedPost; isLogge
 
       {/* 액션 버튼 */}
       <div className="flex items-center px-3 py-2">
-        <button onClick={() => guard(handleToggleLike)} className="p-1">
+        <button onClick={() => guard(handleToggleLike)} className="p-1 flex items-center gap-1">
           <HeartIcon filled={liked} />
+          <span className="text-sm font-semibold text-stone-800">{likeCount.toLocaleString()}</span>
         </button>
-        <button onClick={() => guard(() => setShowComments(true))} className="p-1 ml-1">
+        <button onClick={() => guard(() => setShowComments(true))} className="p-1 ml-3 flex items-center gap-1">
           <CommentIcon />
+          <span className="text-sm font-semibold text-stone-800">{post.commentCount.toLocaleString()}</span>
         </button>
-        <button onClick={handleShare} className="p-1 ml-1">
+        <button onClick={handleShare} className="p-1 ml-3">
           <ShareIcon />
         </button>
         <button onClick={() => guard(handleToggleBookmark)} className="p-1 ml-auto">
           <BookmarkIcon filled={bookmarked} />
         </button>
       </div>
-
-      {/* 좋아요 수 */}
-      <p className="px-4 text-sm font-semibold text-stone-800">
-        좋아요 {likeCount.toLocaleString()}개
-      </p>
 
       {/* 본문 */}
       <div className="px-4 pt-1 pb-1">
@@ -142,16 +139,6 @@ export default function PostCard({ post, isLoggedIn }: { post: FeedPost; isLogge
             <span key={tag} className="text-xs text-point font-medium">#{tag}</span>
           ))}
         </div>
-      )}
-
-      {/* 댓글 보기 */}
-      {post.commentCount > 0 && (
-        <button
-          onClick={() => guard(() => setShowComments(true))}
-          className="px-4 py-1 text-sm text-stone-400"
-        >
-          댓글 {post.commentCount}개 모두 보기
-        </button>
       )}
 
       {/* 타임스탬프 */}
