@@ -17,3 +17,11 @@ body {
 input, textarea, select {
   font-size: max(16px, 1em);
 }
+
+/* iOS safe area utilities (requires viewport-fit=cover in <meta>) */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pb-safe-nav {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+}

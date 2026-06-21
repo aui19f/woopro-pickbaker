@@ -112,7 +112,10 @@ export default function BottomNav({ userId, role }: BottomNavProps) {
             className="fixed inset-0 bg-black/40 z-50"
             onClick={() => setShowModal(false)}
           />
-          <div className="fixed bottom-16 left-0 right-0 bg-white rounded-t-2xl px-4 pt-4 pb-6 z-50">
+          <div
+            className="fixed left-0 right-0 bg-white rounded-t-2xl px-4 pt-4 pb-6 z-50"
+            style={{ bottom: "calc(4rem + env(safe-area-inset-bottom))" }}
+          >
             <p className="text-xs text-stone-400 mb-3 text-center">어디에 글을 쓸까요?</p>
             <div className="flex gap-3">
               {modalOptions().map(({ label, href }) => (
@@ -132,7 +135,8 @@ export default function BottomNav({ userId, role }: BottomNavProps) {
       {/* 로그인 유도 모달 */}
       {showLoginModal && <LoginRequiredModal onClose={() => setShowLoginModal(false)} />}
 
-      <nav className="fixed bottom-0 left-0 right-0 h-16 bg-white border-t border-stone-200 flex items-center z-40">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 z-40 pb-safe">
+        <div className="flex items-center h-16">
         {/* 피드 · 레시피 */}
         {NAV_ITEMS.slice(0, 2).map(({ label, href, Icon }) => {
           const active = isActive(href);
@@ -189,6 +193,7 @@ export default function BottomNav({ userId, role }: BottomNavProps) {
           <MyPageIcon active={isMyPage} />
           <span className="text-[10px] font-medium">마이페이지</span>
         </button>
+        </div>
       </nav>
     </>
   );

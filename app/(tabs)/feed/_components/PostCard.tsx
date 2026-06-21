@@ -74,11 +74,16 @@ export default function PostCard({ post, isLoggedIn }: { post: FeedPost; isLogge
     await toggleBookmark(post.id);
   };
 
+  const [copied, setCopied] = useState(false);
+
   const handleShare = async () => {
+    const url = `${window.location.origin}/feed`;
     if (navigator.share) {
-      await navigator.share({ text: post.content }).catch(() => {});
+      await navigator.share({ title: "픽베이커", text: post.content, url }).catch(() => {});
     } else {
-      alert("공유 기능은 모바일 환경에서 지원됩니다.");
+      await navigator.clipboard.writeText(url).catch(() => {});
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -143,6 +148,13 @@ export default function PostCard({ post, isLoggedIn }: { post: FeedPost; isLogge
 
       {/* 타임스탬프 */}
       <p className="px-4 pt-0.5 pb-3 text-xs text-stone-400">{post.createdAt}</p>
+
+      {/* 링크 복사 토스트 */}
+      {copied && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-stone-800/90 text-white text-xs font-medium px-4 py-2 rounded-full whitespace-nowrap pointer-events-none">
+          링크가 복사되었습니다
+        </div>
+      )}
 
       {/* 댓글 모달 */}
       {showComments && (
