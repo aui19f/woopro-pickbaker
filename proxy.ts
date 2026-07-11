@@ -5,7 +5,7 @@ const PROTECTED_PREFIXES = ["/write"];
 const AUTH_PATHS = ["/login", "/signup"]; // redirect to /feed if already logged in
 const PUBLIC_EXACT = new Set(["/feed", "/offline", "/recipe"]);
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const { supabaseResponse, user } = await updateSession(request);
