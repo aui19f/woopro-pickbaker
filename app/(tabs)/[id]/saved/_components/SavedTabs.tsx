@@ -11,6 +11,14 @@ export type SavedFeedPost = {
   content: string;
 };
 
+export type SavedComment = {
+  id: string;
+  postThumbnailUrl: string | null;
+  postContent: string;
+  content: string;
+  createdAt: string;
+};
+
 export type SavedRecipe = {
   id: string;
   title: string;
@@ -33,6 +41,7 @@ export type SavedOfflineEvent = {
 interface Props {
   likedPosts: SavedFeedPost[];
   bookmarkedPosts: SavedFeedPost[];
+  myComments: SavedComment[];
   likedRecipes: SavedRecipe[];
   bookmarkedRecipes: SavedRecipe[];
   joinedEvents: SavedOfflineEvent[];
@@ -58,6 +67,34 @@ function FeedGrid({ posts, emptyLabel }: { posts: SavedFeedPost[]; emptyLabel: s
               <span className="text-stone-300 text-xs text-center px-1 line-clamp-3">{p.content}</span>
             </div>
           )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ─── 댓글 단 피드 리스트 ───────────────────── */
+
+function CommentFeedList({ comments, emptyLabel }: { comments: SavedComment[]; emptyLabel: string }) {
+  if (comments.length === 0) return <p className="text-sm text-stone-400 text-center py-8">{emptyLabel}</p>;
+  return (
+    <div className="divide-y divide-stone-100">
+      {comments.map((c) => (
+        <div key={c.id} className="flex items-center gap-3 py-3">
+          <div className="w-12 h-12 rounded-lg bg-stone-100 shrink-0 overflow-hidden">
+            {c.postThumbnailUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={c.postThumbnailUrl} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-stone-300 text-xs text-center px-1 line-clamp-2">
+                {c.postContent}
+              </div>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-stone-700 line-clamp-2">{c.content}</p>
+            <p className="text-xs text-stone-400 mt-0.5">{c.createdAt}</p>
+          </div>
         </div>
       ))}
     </div>
@@ -139,7 +176,7 @@ function EventList({ events, emptyLabel }: { events: SavedOfflineEvent[]; emptyL
 /* ─── SavedTabs ──────────────────────────────── */
 
 export default function SavedTabs({
-  likedPosts, bookmarkedPosts,
+  likedPosts, bookmarkedPosts, myComments,
   likedRecipes, bookmarkedRecipes,
   joinedEvents, bookmarkedEvents,
 }: Props) {
@@ -174,6 +211,10 @@ export default function SavedTabs({
             <section>
               <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-3">북마크한 피드</p>
               <FeedGrid posts={bookmarkedPosts} emptyLabel="북마크한 피드가 없습니다." />
+            </section>
+            <section>
+              <p className="text-xs font-bold text-stone-400 uppercase tracking-wide mb-3">댓글 단 피드</p>
+              <CommentFeedList comments={myComments} emptyLabel="댓글 단 피드가 없습니다." />
             </section>
           </div>
         )}

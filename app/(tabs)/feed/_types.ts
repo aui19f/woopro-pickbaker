@@ -16,3 +16,11 @@ export type FeedPost = {
   isBookmarked: boolean;
   createdAt: string;
 };
+
+export type CommentItem = {
+  id: string;
+  nickname: string;
+  username: string;
+  content: string;
+  createdAt: string;
+};

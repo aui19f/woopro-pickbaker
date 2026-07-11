@@ -46,6 +46,7 @@ export default function PostCard({ post, isLoggedIn }: { post: FeedPost; isLogge
   const [liked, setLiked] = useState(post.isLiked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [bookmarked, setBookmarked] = useState(post.isBookmarked);
+  const [commentCount, setCommentCount] = useState(post.commentCount);
   const [expanded, setExpanded] = useState(false);
   const [isTruncated, setIsTruncated] = useState(false);
   const [showComments, setShowComments] = useState(false);
@@ -111,7 +112,7 @@ export default function PostCard({ post, isLoggedIn }: { post: FeedPost; isLogge
         </button>
         <button onClick={() => guard(() => setShowComments(true))} className="p-1 ml-3 flex items-center gap-1">
           <CommentIcon />
-          <span className="text-sm font-semibold text-stone-800">{post.commentCount.toLocaleString()}</span>
+          <span className="text-sm font-semibold text-stone-800">{commentCount.toLocaleString()}</span>
         </button>
         <button onClick={handleShare} className="p-1 ml-3">
           <ShareIcon />
@@ -158,7 +159,7 @@ export default function PostCard({ post, isLoggedIn }: { post: FeedPost; isLogge
 
       {/* 댓글 모달 */}
       {showComments && (
-        <CommentModal postId={post.id} onClose={() => setShowComments(false)} />
+        <CommentModal postId={post.id} onClose={() => setShowComments(false)} onCommentAdded={() => setCommentCount((c) => c + 1)} />
       )}
 
       {/* 로그인 유도 모달 */}

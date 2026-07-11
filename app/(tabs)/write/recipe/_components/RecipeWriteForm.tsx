@@ -241,7 +241,7 @@ export default function RecipeWriteForm() {
         const presignRes = await fetch("/api/presigned-upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ files: allFiles.map((f) => ({ name: f.name })) }),
+          body: JSON.stringify({ files: allFiles.map((f) => ({ name: f.name })), bucket: "recipes" }),
         });
         if (!presignRes.ok) throw new Error("presigned URL 요청 실패");
         const { results } = await presignRes.json();

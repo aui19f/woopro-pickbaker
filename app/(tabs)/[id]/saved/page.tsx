@@ -7,6 +7,7 @@ import SavedTabs, {
   type SavedFeedPost,
   type SavedRecipe,
   type SavedOfflineEvent,
+  type SavedComment,
 } from "./_components/SavedTabs";
 
 const BackIcon = () => (
@@ -29,9 +30,22 @@ export default async function SavedPage({
   const profile = await prisma.user.findUnique({ where: { username: id }, select: { id: true, username: true } });
   if (!profile) redirect("/feed");
 
+  function formatRelativeTime(date: Date): string {
+    const diff = Date.now() - date.getTime();
+    const m = Math.floor(diff / 60000);
+    const h = Math.floor(diff / 3600000);
+    const d = Math.floor(diff / 86400000);
+    if (m < 1) return "방금 전";
+    if (m < 60) return `${m}분 전`;
+    if (h < 24) return `${h}시간 전`;
+    if (d < 7) return `${d}일 전`;
+    return date.toLocaleDateString("ko-KR");
+  }
+
   const [
     likedPostRows,
     bookmarkedPostRows,
+    commentRows,
     likedRecipeRows,
     bookmarkedRecipeRows,
     joinedEventRows,
@@ -44,6 +58,11 @@ export default async function SavedPage({
     }),
     prisma.postBookmark.findMany({
       where: { user_id: profile.id },
+      orderBy: { created_at: "desc" },
+      include: { post: { include: { media: { orderBy: { order: "asc" }, take: 1 } } } },
+    }),
+    prisma.postComment.findMany({
+      where: { author_id: profile.id },
       orderBy: { created_at: "desc" },
       include: { post: { include: { media: { orderBy: { order: "asc" }, take: 1 } } } },
     }),
@@ -68,6 +87,14 @@ export default async function SavedPage({
       include: { event: true },
     }),
   ]);
+
+  const myComments: SavedComment[] = commentRows.map((c) => ({
+    id: c.id,
+    postThumbnailUrl: c.post.media[0]?.url ?? null,
+    postContent: c.post.content,
+    content: c.content,
+    createdAt: formatRelativeTime(c.created_at),
+  }));
 
   const likedPosts: SavedFeedPost[] = likedPostRows.map((r) => ({
     id: r.post.id,
@@ -134,6 +161,7 @@ export default async function SavedPage({
       <SavedTabs
         likedPosts={likedPosts}
         bookmarkedPosts={bookmarkedPosts}
+        myComments={myComments}
         likedRecipes={likedRecipes}
         bookmarkedRecipes={bookmarkedRecipes}
         joinedEvents={joinedEvents}

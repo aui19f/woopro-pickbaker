@@ -2,14 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
-const BUCKET = "posts";
+const ALLOWED_BUCKETS = new Set(["posts", "recipes"]);
 
 export async function POST(req: NextRequest) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { files }: { files: { name: string }[] } = await req.json();
+  const { files, bucket: requestedBucket }: { files: { name: string }[]; bucket?: string } = await req.json();
+  const BUCKET = ALLOWED_BUCKETS.has(requestedBucket ?? "") ? requestedBucket! : "posts";
+
   const admin = createSupabaseAdminClient();
 
   // Create bucket if it doesn't exist yet

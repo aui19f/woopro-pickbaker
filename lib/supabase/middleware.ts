@@ -1,33 +1,34 @@
-import { createServerClient, type SetAllCookies } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
+import type { CookieMethodsServer } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
+  const cookies: CookieMethodsServer = {
+    getAll() {
+      return request.cookies.getAll();
+    },
+    setAll(cookiesToSet) {
+      cookiesToSet.forEach(({ name, value }) =>
+        request.cookies.set(name, value)
+      );
+      supabaseResponse = NextResponse.next({ request });
+      cookiesToSet.forEach(({ name, value, options }) =>
+        supabaseResponse.cookies.set(name, value, options)
+      );
+    },
+  };
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: Parameters<SetAllCookies>[0]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options as unknown as Parameters<typeof supabaseResponse.cookies.set>[2])
-          );
-        },
-      },
-    }
+    { cookies }
   );
 
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  return { supabaseResponse, user };
+  return { supabaseResponse, user: session?.user ?? null };
 }

@@ -52,15 +52,18 @@ export default async function MyPage({ params }: { params: Promise<{ id: string 
           <ChevronRight />
         </Link>
 
-        {(["팔로잉", "알림 설정"] as const).map((item) => (
-          <button
-            key={item}
-            className="w-full flex items-center justify-between px-5 py-4 text-sm text-stone-700"
-          >
-            {item}
-            <ChevronRight />
-          </button>
-        ))}
+        <Link
+          href={`/${id}/notifications`}
+          className="w-full flex items-center justify-between px-5 py-4 text-sm text-stone-700"
+        >
+          알림
+          <ChevronRight />
+        </Link>
+
+        <button className="w-full flex items-center justify-between px-5 py-4 text-sm text-stone-700">
+          팔로잉
+          <ChevronRight />
+        </button>
 
         <LogoutButton />
       </div>
